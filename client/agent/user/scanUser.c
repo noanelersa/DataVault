@@ -30,6 +30,8 @@ Environment:
 #include "scanuser.h"
 #include <dontuse.h>
 
+#include "NetHandler.h"
+
 //
 //  Default and Maximum number of threads.
 //
@@ -38,7 +40,8 @@ Environment:
 #define SCANNER_DEFAULT_THREAD_COUNT        2
 #define SCANNER_MAX_THREAD_COUNT            64
 
-UCHAR FoulString[] = "foul";
+// TODO: Remove later.
+UCHAR FoulString[] = "DataVaultIsBad";
 
 //
 //  Context passed to worker threads
@@ -75,6 +78,77 @@ Return Value
 
     printf( "Connects to the scanner filter and scans buffers \n" );
     printf( "Usage: scanuser [requests per thread] [number of threads(1-64)]\n" );
+}
+
+// Function to send JSON data to the server
+BOOL ScanBufferWithServer()
+{
+    HINTERNET hSession = NULL, hConnect = NULL, hRequest = NULL;
+    BOOL result = FALSE;
+
+    // JSON request body
+    char jsonData[512] = { 0 };
+
+	// TODO: Make these dynamic.
+    LPCSTR user = "domain/user";
+    LPCSTR action = "1";
+    LPCSTR fileID = "123";
+
+    // Format JSON payload.
+    snprintf(jsonData, sizeof(jsonData),
+        "{ \"user\": \"%s\", \"action\": \"%s\", \"fileID\": \"%s\" }",
+        user, action, fileID);
+
+    // Open HTTP connection
+    if (!OpenHttpConnection(hSession, hConnect))
+    {
+        return FALSE;
+    } 
+
+    // Open HTTP request (POST)
+    hRequest = HttpOpenRequestA(hConnect, "POST", "/events", NULL, NULL, NULL,
+        INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 0);
+    if (!hRequest) {
+        printf("Error: HttpOpenRequestA failed with %d\n", GetLastError());
+        InternetCloseHandle(hConnect);
+        InternetCloseHandle(hSession);
+        return FALSE;
+    }
+
+    char headers[512] = { 0 };
+    snprintf(headers, sizeof(headers),
+        "Host: %s:%d\r\nContent-Type: application/json\r\nAccept: */*\r\n",
+        DV_SERVER_IP, DV_SERVER_PORT);
+
+	const DWORD headersLen = (DWORD)strlen(headers);
+    const DWORD jsonLen = (DWORD)strlen(jsonData);
+
+    // Send HTTP request with JSON data
+    if (!HttpSendRequestA(hRequest, headers, headersLen, jsonData, jsonLen))
+    {
+        printf("Error: HttpSendRequestA failed with %drr\n", GetLastError());
+        CloseAllHandlers(&hRequest, &hConnect, &hSession);
+		return FALSE;
+    }
+
+	DWORD statusCode = 0;
+	DWORD statusCodeSize = sizeof(statusCode);
+
+    // Get the HTTP status code.
+    if (HttpQueryInfoA(hRequest, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &statusCode, &statusCodeSize, NULL))
+    {
+        printf("Server responded with HTTP status code: %d\n", statusCode);
+    }
+    else
+    {
+        printf("HttpQueryInfoA failed with error: %d\n", GetLastError());
+    }
+
+    // Cleanup
+	CloseAllHandlers(&hRequest, &hConnect, &hSession);
+
+    // If true, allow access to file.
+    return (statusCode == ALLOW_ACCESS_CODE);
 }
 
 BOOL
@@ -197,17 +271,12 @@ Return Value
         assert(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
         _Analysis_assume_(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
 
-        result = ScanBuffer( notification->Contents, notification->BytesToScan );
-
+        //result = ScanBuffer( notification->Contents, notification->BytesToScan );
+        result = ScanBufferWithServer();
         replyMessage.ReplyHeader.Status = 0;
         replyMessage.ReplyHeader.MessageId = message->MessageHeader.MessageId;
 
-        //
-        //  Need to invert the boolean -- result is true if found
-        //  foul language, in which case SafeToOpen should be set to false.
-        //
-
-        replyMessage.Reply.SafeToOpen = !result;
+        replyMessage.Reply.SafeToOpen = result;
 
         printf( "Replying message, SafeToOpen: %d\n", replyMessage.Reply.SafeToOpen );
 
