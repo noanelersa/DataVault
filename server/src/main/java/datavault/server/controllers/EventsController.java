@@ -28,4 +28,5 @@ public class EventsController {
         eventsService.validateEvent(event);
         return ResponseEntity.ok().build();
     }
+
 }

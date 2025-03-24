@@ -30,9 +30,9 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	implementation("org.springframework.boot:spring-boot-starter-jdbc")
 
-
-
-	compileOnly("org.projectlombok:lombok")
+	compileOnly ("org.projectlombok:lombok:1.18.30")
+	annotationProcessor ("org.projectlombok:lombok:1.18.30")
+	//compileOnly("org.projectlombok:lombok")
 
 //	runtimeOnly("io.micrometer:micrometer-registry-prometheus")
 	runtimeOnly("org.postgresql:postgresql")

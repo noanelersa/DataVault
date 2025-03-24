@@ -10,5 +10,7 @@ package datavault.server.enums;
 public enum Action {
     READ,
     WRITE,
-    MANAGE
+    MANAGE,
+    SCREENSHOT,
+    DELETE
 }
