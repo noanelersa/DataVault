@@ -4,11 +4,11 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "file_acl")
+@Table(name = "acl")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class FileAclEntity {
+public class AclEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

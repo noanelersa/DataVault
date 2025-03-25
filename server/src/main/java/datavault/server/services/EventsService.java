@@ -1,11 +1,11 @@
 package datavault.server.services;
 
 import datavault.server.Repository.ActivityLogRepository;
-import datavault.server.Repository.FileAclRepository;
+import datavault.server.Repository.AclRepository;
 import datavault.server.Repository.FileRepository;
 import datavault.server.dto.EventDTO;
 import datavault.server.entities.ActivityLogEntity;
-import datavault.server.entities.FileAclEntity;
+import datavault.server.entities.AclEntity;
 import datavault.server.entities.FileEntity;
 import datavault.server.entities.UserEntity;
 import datavault.server.enums.Action;
@@ -13,8 +13,7 @@ import datavault.server.exceptions.AclViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
 import java.util.Optional;
 
 @Service
@@ -29,7 +28,6 @@ public class EventsService {
     }
 
     public void validateEvent(EventDTO event) throws AclViolationException {
-        // ✅ Use the injected repository instance
         Optional<FileEntity> file = fileRepository.findByFileId(event.fileID());
 
         if (file.isEmpty()) {
@@ -42,7 +40,6 @@ public class EventsService {
     public void handleFileAction(UserEntity user, FileEntity file, Action action) {
         String permission = getUserPermissionForFile(user, file);
 
-        // No permission at all
         if (permission == null) {
             throw new AclViolationException("You do not have any access to this file.");
         }
@@ -107,18 +104,22 @@ public class EventsService {
 
 
     @Autowired
-    private FileAclRepository fileAclRepository;
+    private AclRepository aclRepository;
 
 
     private String getUserPermissionForFile(UserEntity user, FileEntity file) {
-        Optional<FileAclEntity> aclEntry = fileAclRepository.findByUserAndFile(user, file);
+        Optional<AclEntity> aclEntry = aclRepository.findByUserAndFile(user, file);
 
         if (aclEntry.isPresent()) {
             return aclEntry.get().getPermission();  // Assuming permission is a String like "read", "write"
-        } else {
+        }
+        else {
             return null;  // No permission found
         }
     }
 
-
 }
+
+
+
+

@@ -1,5 +1,6 @@
 package datavault.server.dto;
 
+import datavault.server.entities.UserEntity;
 import datavault.server.enums.Action;
 
 /**
@@ -8,4 +9,4 @@ import datavault.server.enums.Action;
  * @param action The action that had been made on the file
  * @param fileID The ID of the file that the event was published for
  */
-public record EventDTO(String user, Action action, String fileID) {}
+public record EventDTO(UserEntity user, Action action, String fileID) {}

@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.nio.file.FileAlreadyExistsException;
+
 @RestController
 @RequestMapping("/events")
 @Slf4j
@@ -19,14 +21,28 @@ public class EventsController {
     EventsService eventsService;
 
     @PostMapping
-    public ResponseEntity<String> newEvent(@RequestBody EventDTO event) throws AclViolationException {
+    public ResponseEntity<?> newEvent(@RequestBody EventDTO event) {
         log.info("Event was captured, {} tried to {} file with id: '{}'",
                 event.user(),
                 event.action().name().toLowerCase(),
                 event.fileID());
 
-        eventsService.validateEvent(event);
-        return ResponseEntity.ok().build();
+        try {
+            eventsService.validateEvent(event);
+            return ResponseEntity.ok().body("Event validated successfully!");
+        } catch (AclViolationException e) {
+            log.warn("Unauthorized access attempt by user {} on file {}",
+                    event.user(), event.fileID());
+            return ResponseEntity.status(403).body("You do not have permission to perform this action.");
+        /*} catch (FileAlreadyExistsException e) {
+            log.warn("Duplicate file attempt by user {} on file {}",
+                    event.user(), event.fileID());
+            return ResponseEntity.status(409).body("File already exists.");*/
+        } catch (Exception e) {
+            log.error("Unexpected error occurred: {}", e.getMessage());
+            return ResponseEntity.status(500).body("Internal Server Error");
+        }
     }
+
 
 }
