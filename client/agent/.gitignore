@@ -1,0 +1,30 @@
+# Visual Studio-specific ignores
+.vs/
+*.user
+*.suo
+*.cache
+*.ncb
+*.opendb
+*.VC.db
+*.VC.opendb
+*.pdb
+*.vcxproj.Filters
+
+# Minifilter-specific ignores
+*.sys
+*.inf
+*.cat
+*.cab
+*.sig
+
+# Build output directories
+x64/
+Debug/
+Release/
+build/
+
+# Logs, and temp files
+*.log
+*.tlog
+*.tmp
+
