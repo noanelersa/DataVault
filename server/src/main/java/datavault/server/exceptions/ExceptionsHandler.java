@@ -17,5 +17,11 @@ public class ExceptionsHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
     }
 
+    @ExceptionHandler(FileAlreadyExistsException.class)
+    public ResponseEntity<Object> handleDuplicateFile(FileAlreadyExistsException ex) {
+        log.warn(ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).build();
+    }
+
 }
 

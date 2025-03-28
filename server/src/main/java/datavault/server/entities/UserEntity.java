@@ -18,12 +18,11 @@ public class UserEntity {
     @Column(nullable = false, unique = true)
     private String username;
 
-    @Column(unique = true)
-    private String email;
-
     @Column(nullable = false)
-    private String password;
+    private Boolean isAdmin;  // Example: "user" or "admin"
 
-    @Column(nullable = false)
-    private String role;  // Example: "user" or "admin"
+    public UserEntity(String username) {
+        this.username = username;
+        isAdmin = false;
+        }
 }

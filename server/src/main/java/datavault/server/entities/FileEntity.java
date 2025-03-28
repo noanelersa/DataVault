@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 @Entity
 @Table(name = "files")
 @AllArgsConstructor
@@ -24,4 +26,10 @@ public class FileEntity {
 
     @ManyToOne
     private UserEntity owner;
+
+    public FileEntity(String fileName, UserEntity user) {
+        this.fileName = fileName;
+        this.owner = user;
+        this.fileId = UUID.randomUUID().toString();
+    }
 }

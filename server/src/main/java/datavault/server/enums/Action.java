@@ -12,5 +12,15 @@ public enum Action {
     WRITE,
     MANAGE,
     SCREENSHOT,
-    DELETE
+    DELETE;
+
+    public static Action forName(String name) {
+        for (Action action: values()) {
+            if (action.name().toLowerCase().equals(name.toLowerCase())) {
+                return action;
+            }
+        }
+
+        return null;
+    }
 }

@@ -1,7 +1,11 @@
 package datavault.server.entities;
 
+import datavault.server.enums.Action;
 import jakarta.persistence.*;
 import lombok.*;
+
+import java.sql.Timestamp;
+import java.time.Instant;
 
 @Entity
 @Table(name = "acl")
@@ -23,12 +27,16 @@ public class AclEntity {
     private UserEntity user;
 
     @Column(name = "access_level", nullable = false)
-    private String accessLevel;  // "read", "write", "manage"
+    @Enumerated(EnumType.STRING)
+    private Action accessLevel;
 
     @Column(name = "granted_at")
     private java.sql.Timestamp grantedAt;
 
-    public String getPermission() {
-        return accessLevel;
+    public AclEntity(FileEntity f, UserEntity u, Action a) {
+        this.accessLevel = a;
+        this.file = f;
+        this.user = u;
+        grantedAt = Timestamp.from(Instant.now());
     }
 }

@@ -17,7 +17,4 @@ public class HashEntity {
 
     @ManyToOne
     private FileEntity file;
-
-    @Column
-    private String hashAlg;
 }

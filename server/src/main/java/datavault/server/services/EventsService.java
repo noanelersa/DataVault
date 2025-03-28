@@ -20,7 +20,6 @@ import java.util.Optional;
 @Slf4j
 public class EventsService {
     @Autowired
-
     private final FileRepository fileRepository;
 
     public EventsService(FileRepository fileRepository) {
@@ -38,7 +37,7 @@ public class EventsService {
         log.info("Validation passed: File ID '{}' exists. Processing event...", event.fileID());
     }
     public void handleFileAction(UserEntity user, FileEntity file, Action action) {
-        String permission = getUserPermissionForFile(user, file);
+        Action permission = getUserPermissionForFile(user, file);
 
         if (permission == null) {
             throw new AclViolationException("You do not have any access to this file.");
@@ -107,11 +106,11 @@ public class EventsService {
     private AclRepository aclRepository;
 
 
-    private String getUserPermissionForFile(UserEntity user, FileEntity file) {
+    private Action getUserPermissionForFile(UserEntity user, FileEntity file) {
         Optional<AclEntity> aclEntry = aclRepository.findByUserAndFile(user, file);
 
         if (aclEntry.isPresent()) {
-            return aclEntry.get().getPermission();  // Assuming permission is a String like "read", "write"
+            return aclEntry.get().getAccessLevel();  // Assuming permission is a String like "read", "write"
         }
         else {
             return null;  // No permission found
