@@ -19,4 +19,10 @@ public class AlertService {
 
         alertRepository.save(alert);
     }
+
+    public void saveAlert(FileEntity file, UserEntity user, Action action) {
+        AlertEntity alert = new AlertEntity(file, user, action, 2,
+                "The user violated acl");
+        alertRepository.save(alert);
+    }
 }

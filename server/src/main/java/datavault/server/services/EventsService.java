@@ -19,20 +19,12 @@ import java.util.Optional;
 @Slf4j
 public class EventsService {
     @Autowired
-    private final FileRepository fileRepository;
-
-    @Autowired
-    private ActivityLogRepository activityLogRepository;
-
-    @Autowired
-    private AclRepository aclRepository;
-
+    private FileRepository fileRepository;
     @Autowired
     private AclService aclService;
 
-    public EventsService(FileRepository fileRepository) {
-        this.fileRepository = fileRepository;
-    }
+    @Autowired
+    UsersService usersService;
 
     public void validateEvent(EventDTO event) throws AclViolationException {
         Optional<FileEntity> file = fileRepository.findByFileId(event.fileID());
@@ -42,64 +34,11 @@ public class EventsService {
             throw new AclViolationException(event);
         }
 
+        UserEntity user = usersService.getUser(event.user().getUsername());
+
+        aclService.checkViolation(file.get(), user, event.action());
+
         log.info("Validation passed: File ID '{}' exists. Processing event...", event.fileID());
-    }
-
-    public void handleFileAction(UserEntity user, FileEntity file, Action action) {
-        Action permission = aclService.getUserPermissionForFile(user, file);
-
-        if (permission == null) {
-            throw new AclViolationException("You do not have any access to this file.");
-        }
-
-        switch (action) {
-            case WRITE:
-                if (!permission.equals(Action.MANAGE) && !permission.equals(Action.WRITE)) {
-                    throw new AclViolationException("You do not have permission to write to this file.");
-                }
-                break;
-
-            case DELETE:
-                if (!permission.equals(Action.MANAGE)) {
-                    throw new AclViolationException("You do not have permission to delete this file.");
-                }
-                break;
-
-            case SCREENSHOT:
-                if (!permission.equals(Action.MANAGE)) {
-                    throw new AclViolationException("You do not have permission to take a screenshot of this file.");
-                }
-                break;
-
-            case MANAGE:
-                if (!permission.equals(Action.MANAGE)) {
-                    throw new AclViolationException("You do not have permission to manage this file.");
-                }
-                break;
-
-            default:
-                throw new IllegalArgumentException("Unsupported action: " + action);
-        }
-
-        //  the user is authorized
-        logAction(user, file, action);
-    }
-
-
-    private void logAction(UserEntity user, FileEntity file, Action action) {
-        // 1️⃣ Print to logs using Lombok's log (from @Slf4j)
-        log.info("User '{}' performed '{}' action on file '{}'",
-                user.getUsername(), action, file.getFileName());
-
-        // 2️⃣ Create a new ActivityLogEntity for the database
-        ActivityLogEntity logEntry = new ActivityLogEntity();
-        logEntry.setUser(user);
-        logEntry.setFile(file);
-        logEntry.setAction(action.toString()); // Assuming action is enum, convert to String
-        logEntry.setTime(new java.sql.Timestamp(System.currentTimeMillis()));
-
-        // 3️⃣ Save the log entry in the activity_log table
-        activityLogRepository.save(logEntry);
     }
 }
 
