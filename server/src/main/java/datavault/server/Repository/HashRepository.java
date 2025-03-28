@@ -15,4 +15,6 @@ public interface HashRepository extends JpaRepository<HashEntity, String> {
     boolean existsByHash(String hash);
 
     List<HashEntity> findAllByFile(FileEntity file);
+
+    HashEntity findByFileAndOriginal(FileEntity file, Boolean original);
 }

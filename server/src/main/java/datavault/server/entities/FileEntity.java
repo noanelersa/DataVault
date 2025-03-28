@@ -1,5 +1,6 @@
 package datavault.server.entities;
 
+import datavault.server.dto.FileGetDTO;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
