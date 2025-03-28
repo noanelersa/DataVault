@@ -105,4 +105,17 @@ public class FilesService {
         return new FileGetDTO(file.getFileId(), file.getFileName(), hash.getHash(),
                 hash.getTimestamp().toString(), file.getOwner().getUsername());
     }
+
+    public List<FileGetDTO> getAllByUsername(String username) {
+        UserEntity user = usersService.getUser(username);
+        List<FileEntity> files = fileRepository.findAllByOwner(user);
+
+        List<FileGetDTO> dtos = new ArrayList<>();
+
+        for (FileEntity file: files) {
+            dtos.add(convertFileEntityToGetDto(file));
+        }
+
+        return dtos;
+    }
 }
