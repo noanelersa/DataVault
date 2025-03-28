@@ -11,8 +11,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.nio.file.FileAlreadyExistsException;
-
 @RestController
 @RequestMapping("/events")
 @Slf4j

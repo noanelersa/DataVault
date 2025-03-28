@@ -8,9 +8,7 @@ import java.util.List;
 
 public interface AlertRepository extends JpaRepository<AlertEntity, Long> {
 
-    // Find all alerts for a specific file
     List<AlertEntity> findByFile(FileEntity file);
 
-    // Find all alerts by severity
     List<AlertEntity> findBySeverity(Integer severity);
 }

@@ -27,6 +27,19 @@ services:
       - datavault-data:/var/lib/postgresql/data
     networks:
       - datavault-network
+      
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin4_container
+    restart: always
+    ports:
+      - "8888:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: strong-password
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+
 
 networks:
   datavault-network:
@@ -35,5 +48,6 @@ networks:
 
 volumes:
   datavault-data:
+  pgadmin-data:
   
     
