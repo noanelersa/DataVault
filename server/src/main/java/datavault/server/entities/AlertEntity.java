@@ -1,7 +1,11 @@
 package datavault.server.entities;
 
+import datavault.server.enums.Action;
 import jakarta.persistence.*;
 import lombok.*;
+
+import java.sql.Timestamp;
+import java.time.Instant;
 
 @Entity
 @Table(name = "alerts")
@@ -33,4 +37,13 @@ public class AlertEntity {
 
     @Column(name = "created_at")
     private java.sql.Timestamp createdAt;
+
+    public AlertEntity(FileEntity file, UserEntity user, Action action, Integer sev, String message) {
+        this.file = file;
+        this.user = user;
+        this.action = action.name();
+        this.message = message;
+        this.severity = sev;
+        this.createdAt = Timestamp.from(Instant.now());
+    }
 }

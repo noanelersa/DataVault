@@ -4,6 +4,7 @@ import datavault.server.Repository.FileRepository;
 import datavault.server.Repository.HashRepository;
 import datavault.server.dto.AclDTO;
 import datavault.server.dto.FilePostDTO;
+import datavault.server.entities.AclEntity;
 import datavault.server.entities.FileEntity;
 import datavault.server.entities.HashEntity;
 import datavault.server.entities.UserEntity;
@@ -31,7 +32,7 @@ public class FilesService {
 
     public void newFile(FilePostDTO filePostDTO) {
         if (hashRepository.existsByHash(filePostDTO.fileHash())) {
-            // TODO: register an alert as well
+            aclService.checkViolation(filePostDTO, Action.MANAGE);
             throw new FileAlreadyExistsException("");
         }
 
