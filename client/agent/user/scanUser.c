@@ -84,7 +84,6 @@ Return Value
 BOOL ScanBufferWithServer()
 {
     HINTERNET hSession = NULL, hConnect = NULL, hRequest = NULL;
-    BOOL result = FALSE;
 
     // JSON request body
     char jsonData[512] = { 0 };
