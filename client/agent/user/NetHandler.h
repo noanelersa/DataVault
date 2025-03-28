@@ -19,6 +19,7 @@ Environment:
 #define __NET_HANDLER_H__
 
 #include <windows.h>
+#include <stdio.h>
 
 #include <wininet.h>
 #pragma comment(lib, "wininet.lib")
