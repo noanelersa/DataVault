@@ -1,7 +1,9 @@
 package datavault.server.entities;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "users")
@@ -9,7 +11,6 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserEntity {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "user_id")
@@ -19,10 +20,10 @@ public class UserEntity {
     private String username;
 
     @Column(nullable = false)
-    private Boolean isAdmin;  // Example: "user" or "admin"
+    private Boolean isAdmin;
 
     public UserEntity(String username) {
         this.username = username;
         isAdmin = false;
-        }
+    }
 }

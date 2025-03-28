@@ -4,7 +4,6 @@ import datavault.server.Repository.FileRepository;
 import datavault.server.Repository.HashRepository;
 import datavault.server.dto.AclDTO;
 import datavault.server.dto.FilePostDTO;
-import datavault.server.entities.AclEntity;
 import datavault.server.entities.FileEntity;
 import datavault.server.entities.HashEntity;
 import datavault.server.entities.UserEntity;

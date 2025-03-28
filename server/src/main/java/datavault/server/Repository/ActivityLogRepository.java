@@ -9,9 +9,7 @@ import java.util.List;
 
 public interface ActivityLogRepository extends JpaRepository<ActivityLogEntity, Long> {
 
-    // Find all activities for a file
     List<ActivityLogEntity> findByFile(FileEntity file);
 
-    // Find all activities by user
     List<ActivityLogEntity> findByUser(UserEntity user);
 }

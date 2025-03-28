@@ -1,11 +1,10 @@
 package datavault.server.services;
 
-import datavault.server.Repository.ActivityLogRepository;
 import datavault.server.Repository.AclRepository;
+import datavault.server.Repository.ActivityLogRepository;
 import datavault.server.Repository.FileRepository;
 import datavault.server.dto.EventDTO;
 import datavault.server.entities.ActivityLogEntity;
-import datavault.server.entities.AclEntity;
 import datavault.server.entities.FileEntity;
 import datavault.server.entities.UserEntity;
 import datavault.server.enums.Action;
@@ -45,6 +44,7 @@ public class EventsService {
 
         log.info("Validation passed: File ID '{}' exists. Processing event...", event.fileID());
     }
+
     public void handleFileAction(UserEntity user, FileEntity file, Action action) {
         Action permission = aclService.getUserPermissionForFile(user, file);
 
@@ -84,7 +84,6 @@ public class EventsService {
         //  the user is authorized
         logAction(user, file, action);
     }
-
 
 
     private void logAction(UserEntity user, FileEntity file, Action action) {

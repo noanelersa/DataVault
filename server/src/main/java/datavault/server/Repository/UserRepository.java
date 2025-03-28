@@ -1,4 +1,5 @@
 package datavault.server.Repository;
+
 import datavault.server.entities.UserEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 

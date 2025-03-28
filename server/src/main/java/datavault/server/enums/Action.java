@@ -15,7 +15,7 @@ public enum Action {
     DELETE;
 
     public static Action forName(String name) {
-        for (Action action: values()) {
+        for (Action action : values()) {
             if (action.name().toLowerCase().equals(name.toLowerCase())) {
                 return action;
             }

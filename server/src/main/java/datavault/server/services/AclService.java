@@ -1,7 +1,6 @@
 package datavault.server.services;
 
 import datavault.server.Repository.AclRepository;
-import datavault.server.Repository.FileRepository;
 import datavault.server.dto.AclDTO;
 import datavault.server.dto.FilePostDTO;
 import datavault.server.entities.AclEntity;
@@ -11,7 +10,6 @@ import datavault.server.enums.Action;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -30,7 +28,7 @@ public class AclService {
 
     public void newAcl(FileEntity file, List<AclDTO> aclList) {
         List<AclEntity> entities = new ArrayList<>();
-        for ( AclDTO aclDTO: aclList) {
+        for (AclDTO aclDTO : aclList) {
             UserEntity user = usersService.getUser(aclDTO.username());
             AclEntity acl = new AclEntity(file, user, aclDTO.access());
             entities.add(acl);
@@ -53,5 +51,4 @@ public class AclService {
         Optional<AclEntity> aclEntry = aclRepository.findByUserAndFile(user, file);
         return aclEntry.map(AclEntity::getAccessLevel).orElse(null);
     }
-
 }

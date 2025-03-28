@@ -8,5 +8,6 @@ import org.springframework.stereotype.Repository;
 public interface HashRepository extends JpaRepository<HashEntity, String> {
 
     HashEntity findByHash(String hash);
+
     boolean existsByHash(String hash);
 }
