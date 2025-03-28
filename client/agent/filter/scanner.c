@@ -159,6 +159,11 @@ const FLT_OPERATION_REGISTRATION Callbacks[] = {
       ScannerPreCleanup,
       NULL},
 
+    { IRP_MJ_READ,
+      0,
+      ScannerPreRead,
+      NULL},
+
     { IRP_MJ_WRITE,
       0,
       ScannerPreWrite,
@@ -1332,6 +1337,160 @@ Return Value:
 
 
 FLT_PREOP_CALLBACK_STATUS
+ScannerPreRead(
+    _Inout_ PFLT_CALLBACK_DATA Data,
+    _In_ PCFLT_RELATED_OBJECTS FltObjects,
+    _Flt_CompletionContext_Outptr_ PVOID* CompletionContext
+)
+/*++
+
+Routine Description:
+
+    Pre read callback. We want to scan the file before allowing the read operation.
+
+Arguments:
+
+    Data - The structure which describes the operation parameters.
+
+    FltObjects - The structure which describes the objects affected by this
+        operation.
+
+    CompletionContext - Output parameter which can be used to pass a context
+        from this pre-read callback to the post-read callback.
+
+Return Value:
+
+    FLT_PREOP_SUCCESS_WITH_CALLBACK - If this is not our user-mode process.
+    FLT_PREOP_SUCCESS_NO_CALLBACK - All other threads.
+
+--*/
+{
+    PSCANNER_STREAM_HANDLE_CONTEXT scannerContext;
+    FLT_POSTOP_CALLBACK_STATUS returnStatus = FLT_POSTOP_FINISHED_PROCESSING;
+    PFLT_FILE_NAME_INFORMATION nameInfo;
+    NTSTATUS status;
+    BOOLEAN safeToOpen, scanFile;
+
+    UNREFERENCED_PARAMETER(CompletionContext);
+
+    //
+    //  If this create was failing anyway, don't bother scanning now.
+    //
+
+    if (!NT_SUCCESS(Data->IoStatus.Status) ||
+        (STATUS_REPARSE == Data->IoStatus.Status)) {
+
+        return FLT_POSTOP_FINISHED_PROCESSING;
+    }
+
+    //
+    //  Check if we are interested in this file.
+    //
+
+    status = FltGetFileNameInformation(Data,
+        FLT_FILE_NAME_NORMALIZED |
+        FLT_FILE_NAME_QUERY_DEFAULT,
+        &nameInfo);
+
+    if (!NT_SUCCESS(status)) {
+
+        return FLT_POSTOP_FINISHED_PROCESSING;
+    }
+
+    FltParseFileNameInformation(nameInfo);
+
+    //
+    //  Check if the extension matches the list of extensions we are interested in
+    //
+
+    scanFile = ScannerpCheckExtension(&nameInfo->Extension);
+
+    //
+    //  Release file name info, we're done with it
+    //
+
+    FltReleaseFileNameInformation(nameInfo);
+
+    if (!scanFile) {
+
+        //
+        //  Not an extension we are interested in
+        //
+
+        return FLT_POSTOP_FINISHED_PROCESSING;
+    }
+
+    (VOID)ScannerpScanFileInUserMode(FltObjects->Instance,
+        FltObjects->FileObject,
+        &safeToOpen);
+
+    if (!safeToOpen) {
+
+        //
+        //  Ask the filter manager to undo the create.
+        //
+
+        DbgPrint("!!! scanner.sys -- foul language detected in postcreate !!!\n");
+
+        DbgPrint("!!! scanner.sys -- undoing create \n");
+
+        FltCancelFileOpen(FltObjects->Instance, FltObjects->FileObject);
+
+        Data->IoStatus.Status = STATUS_ACCESS_DENIED;
+        Data->IoStatus.Information = 0;
+
+        returnStatus = FLT_POSTOP_FINISHED_PROCESSING;
+
+    }
+    else if (FltObjects->FileObject->WriteAccess) {
+
+        //
+        //
+        //  The create has requested write access, mark to rescan the file.
+        //  Allocate the context.
+        //
+
+        status = FltAllocateContext(ScannerData.Filter,
+            FLT_STREAMHANDLE_CONTEXT,
+            sizeof(SCANNER_STREAM_HANDLE_CONTEXT),
+            PagedPool,
+            &scannerContext);
+
+        if (NT_SUCCESS(status)) {
+
+            //
+            //  Set the handle context.
+            //
+
+            scannerContext->RescanRequired = TRUE;
+
+            (VOID)FltSetStreamHandleContext(FltObjects->Instance,
+                FltObjects->FileObject,
+                FLT_SET_CONTEXT_REPLACE_IF_EXISTS,
+                scannerContext,
+                NULL);
+
+            //
+            //  Normally we would check the results of FltSetStreamHandleContext
+            //  for a variety of error cases. However, The only error status
+            //  that could be returned, in this case, would tell us that
+            //  contexts are not supported.  Even if we got this error,
+            //  we just want to release the context now and that will free
+            //  this memory if it was not successfully set.
+            //
+
+            //
+            //  Release our reference on the context (the set adds a reference)
+            //
+
+            FltReleaseContext(scannerContext);
+        }
+    }
+
+    return returnStatus;
+}
+
+FLT_PREOP_CALLBACK_STATUS
 ScannerPreWrite (
     _Inout_ PFLT_CALLBACK_DATA Data,
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
@@ -1359,185 +1518,125 @@ Return Value:
 
 --*/
 {
-    FLT_PREOP_CALLBACK_STATUS returnStatus = FLT_PREOP_SUCCESS_NO_CALLBACK;
+    PSCANNER_STREAM_HANDLE_CONTEXT scannerContext;
+    FLT_POSTOP_CALLBACK_STATUS returnStatus = FLT_POSTOP_FINISHED_PROCESSING;
+    PFLT_FILE_NAME_INFORMATION nameInfo;
     NTSTATUS status;
-    PSCANNER_NOTIFICATION notification = NULL;
-    PSCANNER_STREAM_HANDLE_CONTEXT context = NULL;
-    ULONG replyLength;
-    BOOLEAN safe = TRUE;
-    PUCHAR buffer;
+    BOOLEAN safeToOpen, scanFile;
 
-    UNREFERENCED_PARAMETER( CompletionContext );
+    UNREFERENCED_PARAMETER(CompletionContext);
 
     //
-    //  If not client port just ignore this write.
+    //  If this create was failing anyway, don't bother scanning now.
     //
 
-    if (ScannerData.ClientPort == NULL) {
+    if (!NT_SUCCESS(Data->IoStatus.Status) ||
+        (STATUS_REPARSE == Data->IoStatus.Status)) {
 
-        return FLT_PREOP_SUCCESS_NO_CALLBACK;
-    }
-
-    status = FltGetStreamHandleContext( FltObjects->Instance,
-                                        FltObjects->FileObject,
-                                        &context );
-
-    if (!NT_SUCCESS( status )) {
-
-        //
-        //  We are not interested in this file
-        //
-
-        return FLT_PREOP_SUCCESS_NO_CALLBACK;
+        return FLT_POSTOP_FINISHED_PROCESSING;
     }
 
     //
-    //  Use try-finally to cleanup
+    //  Check if we are interested in this file.
     //
 
-    try {
+    status = FltGetFileNameInformation(Data,
+        FLT_FILE_NAME_NORMALIZED |
+        FLT_FILE_NAME_QUERY_DEFAULT,
+        &nameInfo);
+
+    if (!NT_SUCCESS(status)) {
+
+        return FLT_POSTOP_FINISHED_PROCESSING;
+    }
+
+    FltParseFileNameInformation(nameInfo);
+
+    //
+    //  Check if the extension matches the list of extensions we are interested in
+    //
+
+    scanFile = ScannerpCheckExtension(&nameInfo->Extension);
+
+    //
+    //  Release file name info, we're done with it
+    //
+
+    FltReleaseFileNameInformation(nameInfo);
+
+    if (!scanFile) {
 
         //
-        //  Pass the contents of the buffer to user mode.
+        //  Not an extension we are interested in
         //
 
-        if (Data->Iopb->Parameters.Write.Length != 0) {
+        return FLT_POSTOP_FINISHED_PROCESSING;
+    }
+
+    (VOID)ScannerpScanFileInUserMode(FltObjects->Instance,
+        FltObjects->FileObject,
+        &safeToOpen);
+
+    if (!safeToOpen) {
+
+        //
+        //  Ask the filter manager to undo the create.
+        //
+
+        DbgPrint("!!! scanner.sys -- foul language detected in postcreate !!!\n");
+
+        DbgPrint("!!! scanner.sys -- undoing create \n");
+
+        FltCancelFileOpen(FltObjects->Instance, FltObjects->FileObject);
+
+        Data->IoStatus.Status = STATUS_ACCESS_DENIED;
+        Data->IoStatus.Information = 0;
+
+        returnStatus = FLT_POSTOP_FINISHED_PROCESSING;
+
+    }
+    else if (FltObjects->FileObject->WriteAccess) {
+
+        //
+        //
+        //  The create has requested write access, mark to rescan the file.
+        //  Allocate the context.
+        //
+
+        status = FltAllocateContext(ScannerData.Filter,
+            FLT_STREAMHANDLE_CONTEXT,
+            sizeof(SCANNER_STREAM_HANDLE_CONTEXT),
+            PagedPool,
+            &scannerContext);
+
+        if (NT_SUCCESS(status)) {
 
             //
-            //  Get the users buffer address.  If there is a MDL defined, use
-            //  it.  If not use the given buffer address.
+            //  Set the handle context.
             //
 
-            if (Data->Iopb->Parameters.Write.MdlAddress != NULL) {
+            scannerContext->RescanRequired = TRUE;
 
-                buffer = MmGetSystemAddressForMdlSafe( Data->Iopb->Parameters.Write.MdlAddress,
-                                                       NormalPagePriority | MdlMappingNoExecute );
-
-                //
-                //  If we have a MDL but could not get and address, we ran out
-                //  of memory, report the correct error
-                //
-
-                if (buffer == NULL) {
-
-                    Data->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
-                    Data->IoStatus.Information = 0;
-                    returnStatus = FLT_PREOP_COMPLETE;
-                    leave;
-                }
-
-            } else {
-
-                //
-                //  Use the users buffer
-                //
-
-                buffer  = Data->Iopb->Parameters.Write.WriteBuffer;
-            }
+            (VOID)FltSetStreamHandleContext(FltObjects->Instance,
+                FltObjects->FileObject,
+                FLT_SET_CONTEXT_REPLACE_IF_EXISTS,
+                scannerContext,
+                NULL);
 
             //
-            //  In a production-level filter, we would actually let user mode scan the file directly.
-            //  Allocating & freeing huge amounts of non-paged pool like this is not very good for system perf.
-            //  This is just a sample!
+            //  Normally we would check the results of FltSetStreamHandleContext
+            //  for a variety of error cases. However, The only error status
+            //  that could be returned, in this case, would tell us that
+            //  contexts are not supported.  Even if we got this error,
+            //  we just want to release the context now and that will free
+            //  this memory if it was not successfully set.
             //
 
-            notification = ExAllocatePoolZero( NonPagedPool,
-                                               sizeof( SCANNER_NOTIFICATION ),
-                                               'nacS' );
-            if (notification == NULL) {
-
-                Data->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
-                Data->IoStatus.Information = 0;
-                returnStatus = FLT_PREOP_COMPLETE;
-                leave;
-            }
-
-            notification->BytesToScan = min( Data->Iopb->Parameters.Write.Length, SCANNER_READ_BUFFER_SIZE );
-
             //
-            //  The buffer can be a raw user buffer. Protect access to it
+            //  Release our reference on the context (the set adds a reference)
             //
 
-            try  {
-
-                RtlCopyMemory( &notification->Contents,
-                               buffer,
-                               notification->BytesToScan );
-
-            } except( EXCEPTION_EXECUTE_HANDLER ) {
-
-                //
-                //  Error accessing buffer. Complete i/o with failure
-                //
-
-                Data->IoStatus.Status = GetExceptionCode() ;
-                Data->IoStatus.Information = 0;
-                returnStatus = FLT_PREOP_COMPLETE;
-                leave;
-            }
-
-            //
-            //  Send message to user mode to indicate it should scan the buffer.
-            //  We don't have to synchronize between the send and close of the handle
-            //  as FltSendMessage takes care of that.
-            //
-
-            replyLength = sizeof( SCANNER_REPLY );
-
-            status = FltSendMessage( ScannerData.Filter,
-                                     &ScannerData.ClientPort,
-                                     notification,
-                                     sizeof( SCANNER_NOTIFICATION ),
-                                     notification,
-                                     &replyLength,
-                                     NULL );
-
-            if (STATUS_SUCCESS == status) {
-
-               safe = ((PSCANNER_REPLY) notification)->SafeToOpen;
-
-           } else {
-
-               //
-               //  Couldn't send message. This sample will let the i/o through.
-               //
-
-               DbgPrint( "!!! scanner.sys --- couldn't send message to user-mode to scan file, status 0x%X\n", status );
-           }
-        }
-
-        if (!safe) {
-
-            //
-            //  Block this write if not paging i/o (as a result of course, this scanner will not prevent memory mapped writes of contaminated
-            //  strings to the file, but only regular writes). The effect of getting ERROR_ACCESS_DENIED for many apps to delete the file they
-            //  are trying to write usually.
-            //  To handle memory mapped writes - we should be scanning at close time (which is when we can really establish that the file object
-            //  is not going to be used for any more writes)
-            //
-
-            DbgPrint( "!!! scanner.sys -- foul language detected in write !!!\n" );
-
-            if (!FlagOn( Data->Iopb->IrpFlags, IRP_PAGING_IO )) {
-
-                DbgPrint( "!!! scanner.sys -- blocking the write !!!\n" );
-
-                Data->IoStatus.Status = STATUS_ACCESS_DENIED;
-                Data->IoStatus.Information = 0;
-                returnStatus = FLT_PREOP_COMPLETE;
-            }
-        }
-
-    } finally {
-
-        if (notification != NULL) {
-
-            ExFreePoolWithTag( notification, 'nacS' );
-        }
-
-        if (context) {
-
-            FltReleaseContext( context );
+            FltReleaseContext(scannerContext);
         }
     }
 
