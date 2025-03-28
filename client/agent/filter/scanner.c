@@ -159,6 +159,11 @@ const FLT_OPERATION_REGISTRATION Callbacks[] = {
       ScannerPreCleanup,
       NULL},
 
+    { IRP_MJ_READ,
+      0,
+      ScannerPreRead,
+      NULL},
+
     { IRP_MJ_WRITE,
       0,
       ScannerPreWrite,
@@ -1330,6 +1335,54 @@ Return Value:
     return FLT_PREOP_SUCCESS_NO_CALLBACK;
 }
 
+
+FLT_PREOP_CALLBACK_STATUS
+ScannerPreRead(
+    _Inout_ PFLT_CALLBACK_DATA Data,
+    _In_ PCFLT_RELATED_OBJECTS FltObjects,
+    _Flt_CompletionContext_Outptr_ PVOID* CompletionContext
+)
+/*++
+
+Routine Description:
+
+    Pre read callback. We want to scan the file before allowing the read operation.
+
+Arguments:
+
+    Data - The structure which describes the operation parameters.
+
+    FltObjects - The structure which describes the objects affected by this
+        operation.
+
+    CompletionContext - Output parameter which can be used to pass a context
+        from this pre-read callback to the post-read callback.
+
+Return Value:
+
+    FLT_PREOP_SUCCESS_WITH_CALLBACK - If this is not our user-mode process.
+    FLT_PREOP_SUCCESS_NO_CALLBACK - All other threads.
+
+--*/
+{
+    UNREFERENCED_PARAMETER(FltObjects);
+    UNREFERENCED_PARAMETER(CompletionContext = NULL);
+
+    PAGED_CODE();
+
+    //
+    //  See if this read is being done by our user process.
+    //
+
+    if (IoThreadToProcess(Data->Thread) == ScannerData.UserProcess) {
+
+        DbgPrint("!!! scanner.sys -- allowing read for trusted process \n");
+
+        return FLT_PREOP_SUCCESS_NO_CALLBACK;
+    }
+
+    return FLT_PREOP_SUCCESS_WITH_CALLBACK;
+}
 
 FLT_PREOP_CALLBACK_STATUS
 ScannerPreWrite (

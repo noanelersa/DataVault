@@ -131,6 +131,13 @@ ScannerPreCleanup (
     );
 
 FLT_PREOP_CALLBACK_STATUS
+ScannerPreRead(
+    _Inout_ PFLT_CALLBACK_DATA Data,
+    _In_ PCFLT_RELATED_OBJECTS FltObjects,
+    _Flt_CompletionContext_Outptr_ PVOID* CompletionContext
+);
+
+FLT_PREOP_CALLBACK_STATUS
 ScannerPreWrite (
     _Inout_ PFLT_CALLBACK_DATA Data,
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
