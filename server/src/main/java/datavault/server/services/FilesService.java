@@ -13,7 +13,6 @@ import datavault.server.enums.Action;
 import datavault.server.exceptions.FileAlreadyExistsException;
 import datavault.server.exceptions.NoSuchFileException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -35,7 +34,7 @@ public class FilesService {
     @Autowired
     private AclService aclService;
 
-    public void newFile(FilePostDTO filePostDTO) {
+    public String newFile(FilePostDTO filePostDTO) {
         if (hashRepository.existsByHash(filePostDTO.fileHash())) {
             aclService.checkViolation(filePostDTO, Action.MANAGE);
             throw new FileAlreadyExistsException("");
@@ -56,6 +55,8 @@ public class FilesService {
         acl.add(new AclDTO(filePostDTO.owner(), Action.MANAGE));
 
         aclService.newAcl(file, acl);
+
+        return file.getFileId();
     }
 
     public void updateFileHash(FilePutDTO filePutDTO) {

@@ -19,9 +19,9 @@ public class FilesController {
     FilesService filesService;
 
     @PostMapping
-    public ResponseEntity<FileGetDTO> register(@RequestBody FilePostDTO filePostDTO) {
-        filesService.newFile(filePostDTO);
-        return ResponseEntity.ok().build();
+    public ResponseEntity<String> register(@RequestBody FilePostDTO filePostDTO) {
+        String fileId = filesService.newFile(filePostDTO);
+        return ResponseEntity.ok(fileId);
     }
 
     @PutMapping
