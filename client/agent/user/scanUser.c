@@ -31,6 +31,7 @@ Environment:
 #include <dontuse.h>
 
 #include "NetHandler.h"
+#include "Utils.h"
 
 //
 //  Default and Maximum number of threads.
@@ -51,6 +52,7 @@ typedef struct _SCANNER_THREAD_CONTEXT {
 
     HANDLE Port;
     HANDLE Completion;
+	char* username;
 
 } SCANNER_THREAD_CONTEXT, *PSCANNER_THREAD_CONTEXT;
 
@@ -81,7 +83,7 @@ Return Value
 }
 
 // Function to send JSON data to the server
-BOOL ScanBufferWithServer()
+BOOL ScanBufferWithServer(const char* username)
 {
     HINTERNET hSession = NULL, hConnect = NULL, hRequest = NULL;
 
@@ -89,14 +91,13 @@ BOOL ScanBufferWithServer()
     char jsonData[512] = { 0 };
 
 	// TODO: Make these dynamic.
-    LPCSTR user = "domain/user";
     LPCSTR action = "1";
     LPCSTR fileID = "123";
 
     // Format JSON payload.
     snprintf(jsonData, sizeof(jsonData),
         "{ \"user\": \"%s\", \"action\": \"%s\", \"fileID\": \"%s\" }",
-        user, action, fileID);
+        username, action, fileID);
 
     // Open HTTP connection
     if (!OpenHttpConnection(hSession, hConnect))
@@ -271,7 +272,7 @@ Return Value
         _Analysis_assume_(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
 
         //result = ScanBuffer( notification->Contents, notification->BytesToScan );
-        result = ScanBufferWithServer();
+        result = ScanBufferWithServer(Context->username);
         replyMessage.ReplyHeader.Status = 0;
         replyMessage.ReplyHeader.MessageId = message->MessageHeader.MessageId;
 
@@ -367,6 +368,19 @@ main (
         }
     }
 
+	// Get the system username.
+	char username[USERNAME_NAX_SIZE] = { 0 };
+	BOOLEAN retGetUser = GetSystemUser(username, sizeof(username));
+    if (!retGetUser)
+    {
+		printf("Error: Getting the systen username failed\n");
+		return 1;
+    }
+
+	// Hash the username with FNV-1a.
+    char hashedUsername[FNV_HASH_STR_LEN] = { 0 };
+	Fnv1aHashString(username, hashedUsername);
+
     //
     //  Open a commuication channel to the filter
     //
@@ -406,6 +420,7 @@ main (
 
     context.Port = port;
     context.Completion = completion;
+	context.username = hashedUsername;
 
     //
     //  Allocate messages.

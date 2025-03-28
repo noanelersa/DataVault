@@ -175,6 +175,7 @@
   <ItemGroup>
     <ClCompile Include="NetHandler.c" />
     <ClCompile Include="scanUser.c" />
+    <ClCompile Include="Utils.c" />
     <ResourceCompile Include="scanUser.rc" />
   </ItemGroup>
   <ItemGroup>
