@@ -1,4 +1,5 @@
 #include "UINetHandler.h"
+#include "ServerNetHandler.h"
 
 BOOL InitializeServer(SOCKET* listenSocket)
 {
@@ -66,10 +67,14 @@ BOOL InitializeServer(SOCKET* listenSocket)
 
 DWORD WINAPI ServerWorker(LPVOID lpParam)
 {
-    SOCKET listenSocket = *(SOCKET*)lpParam;
     SOCKET clientSocket;
     char recvbuf[MAX_UI_MESSAGE_SIZE] = { 0 };
     int iResult = 0, iSendResult = 0;
+
+	// Parse the agent server context.
+	AGENT_SERVER_CONTEXT agentServerContext = *(AGENT_SERVER_CONTEXT*)lpParam;
+    SOCKET listenSocket = *(agentServerContext.listenSocket);
+	const char* username = agentServerContext.username;
 
     while (TRUE)
     {
@@ -91,8 +96,14 @@ DWORD WINAPI ServerWorker(LPVOID lpParam)
             {
                 printf("Bytes received from UI: %d\n", iResult);
 
-                // Echo the buffer back to the sender.
+				// Handle the UI request.
+				BOOLEAN ret = HandleUIRequest(recvbuf, iResult, username);
+				// TODO: Handle the return value.
+				(void)ret;
+
+				// TODO: Send the response to the UI.
                 iSendResult = send(clientSocket, recvbuf, iResult, 0);
+
                 if (iSendResult == SOCKET_ERROR)
                 {
                     printf("send failed with error: %d\n", WSAGetLastError());
@@ -130,4 +141,122 @@ DWORD WINAPI ServerWorker(LPVOID lpParam)
     }
 
     return 0;
+}
+
+BOOLEAN HandleUIRequest(char* recvbuf, int recvbuflen, const char* username)
+{
+    if (recvbuflen == 0)
+    {
+		printf("Error: Received empty message from UI\n");
+		return FALSE;
+    }
+
+	const unsigned int retquestType = recvbuf[0];
+
+    switch (retquestType)
+    {
+    case UI_REQUEST_FILE_REGISTER:
+        return HandleUIFileRegister(recvbuf, recvbuflen, username);
+    default:
+        printf("Error: Invalid requrest type received from UI: %d\n", retquestType);
+        return FALSE;
+    }
+}
+
+BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username)
+{
+    HINTERNET hSession = NULL, hConnect = NULL, hRequest = NULL;
+
+    // JSON request body
+    char jsonData[512] = { 0 };
+
+	// At the momwnt we don't support fileHash functionality.
+	// Therefore, we use the username as the fileHash for now.
+    const char* fileHash = username;
+
+	// TODO: Get the ACL from the UI.
+    // Follow the API format - USE recvbuf and recvbuflen.
+    const char* acl = "";
+	(void)recvbuf;
+	(void)recvbuflen;
+
+    // Format JSON payload.
+    snprintf(jsonData, sizeof(jsonData),
+        "{ \"owner\": \"%s\", \"file-hash\": \"%s\", \"acl\": \"%s\" }",
+        username, fileHash, acl);
+
+    // Open HTTP connection
+    if (!OpenHttpConnection(hSession, hConnect))
+    {
+        return FALSE;
+    }
+
+    // Open HTTP request (POST)
+    hRequest = HttpOpenRequestA(hConnect, "POST", "/file", NULL, NULL, NULL,
+        INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 0);
+    if (!hRequest) 
+    {
+        printf("Error: HttpOpenRequestA failed with %d\n", GetLastError());
+        InternetCloseHandle(hConnect);
+        InternetCloseHandle(hSession);
+        return FALSE;
+    }
+
+    char headers[512] = { 0 };
+    snprintf(headers, sizeof(headers),
+        "Host: %s:%d\r\nContent-Type: application/json\r\nAccept: */*\r\n",
+        DV_SERVER_IP, DV_SERVER_PORT);
+
+    const DWORD headersLen = (DWORD)strlen(headers);
+    const DWORD jsonLen = (DWORD)strlen(jsonData);
+
+    // Send HTTP request with JSON data
+    if (!HttpSendRequestA(hRequest, headers, headersLen, jsonData, jsonLen))
+    {
+        printf("Error: HttpSendRequestA failed with %drr\n", GetLastError());
+        CloseAllHandlers(&hRequest, &hConnect, &hSession);
+        return FALSE;
+    }
+
+    DWORD statusCode = 0;
+    DWORD statusCodeSize = sizeof(statusCode);
+
+    // Get the HTTP status code.
+    if (!HttpQueryInfoA(hRequest, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &statusCode, &statusCodeSize, NULL))
+    {
+        printf("HttpQueryInfoA failed with error for file registeration: %d\n", GetLastError());
+        return FALSE;
+    }
+
+    printf("Server responded with HTTP status code for file registeration: %d\n", statusCode);
+
+	// Check if the file was registered successfully.
+	// TODO: Deal with the case where the file was not registered becaue it already exists.
+    if (statusCode != ALLOW_ACCESS_CODE)
+    {
+        return FALSE;
+    }
+
+    // Read the response.
+    // TODO: Change to uuid size (fileId size).
+    char serverResponse[512] = { 0 };
+    DWORD bytesRead = 0;
+
+	// TODO: Remove if not needed.
+    // For reading in chunks.
+    // while (InternetReadFile(hRequest, serverResponse, sizeof(serverResponse), &bytesRead) && bytesRead > 0)
+
+    if (!InternetReadFile(hRequest, serverResponse, sizeof(serverResponse) - 1, &bytesRead))
+    {
+        printf("Error: InternetReadFile failed with %d in file registeration\n", GetLastError());
+    }
+
+	// TODO: Parse the fileID.
+	// TODO: Save the (magic+fileID) at the start of the file.
+
+    // Cleanup
+    CloseAllHandlers(&hRequest, &hConnect, &hSession);
+
+	// TODO: Deal with further errors.
+    return TRUE;
 }
