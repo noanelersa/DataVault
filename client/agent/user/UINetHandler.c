@@ -1,5 +1,7 @@
 #include "UINetHandler.h"
 #include "ServerNetHandler.h"
+#include "Utils.h"
+#include <time.h>
 
 BOOL InitializeServer(SOCKET* listenSocket)
 {
@@ -170,9 +172,15 @@ BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username
     // JSON request body
     char jsonData[512] = { 0 };
 
-	// At the momwnt we don't support fileHash functionality.
-	// Therefore, we use the username as the fileHash for now.
-    const char* fileHash = username;
+    // At the moment we don't support file hash functionality in the server.
+    // Therefore, we use the current time as the file hash for now - in Fnv1a format.
+	char timeBuffer[TIME_BUFFER_SIZE] = { 0 };
+	char fileHash[FNV_HASH_STR_LEN] = { 0 };
+
+    time_t timeNow = time(NULL);
+    struct tm* timeSt = localtime(&timeNow);
+    strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", timeSt);
+	Fnv1aHashString(timeBuffer, fileHash);
 
 	// TODO: Get the ACL from the UI.
     // Follow the API format - USE recvbuf and recvbuflen.

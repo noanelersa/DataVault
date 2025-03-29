@@ -29,6 +29,9 @@ Environment:
 
 #define MAX_UI_MESSAGE_SIZE 1024
 
+// TODO: Remove when file hsahing is implemented.
+#define TIME_BUFFER_SIZE 64
+
 // UI request types
 #define UI_REQUEST_FILE_REGISTER 1
 
