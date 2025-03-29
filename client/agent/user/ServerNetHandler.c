@@ -1,4 +1,4 @@
-#include "NetHandler.h"
+#include "ServerNetHandler.h"
 
 BOOL OpenHttpConnection(HINTERNET* hSession, HINTERNET* hConnect)
 {

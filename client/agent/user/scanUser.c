@@ -30,7 +30,8 @@ Environment:
 #include "scanuser.h"
 #include <dontuse.h>
 
-#include "NetHandler.h"
+#include "ServerNetHandler.h"
+#include "UINetHandler.h"
 #include "Utils.h"
 
 //
@@ -341,12 +342,17 @@ main (
     PSCANNER_MESSAGE messages;
     DWORD threadId;
     HRESULT hr;
+	AGENT_SERVER_CONTEXT agentServerContext;
+
+    SOCKET listenSocket = INVALID_SOCKET;
+    HANDLE serverThread;
 
     //
     //  Check how many threads and per thread requests are desired.
     //
 
-    if (argc > 1) {
+    if (argc > 1)
+    {
 
         requestCount = atoi( argv[1] );
 
@@ -356,30 +362,51 @@ main (
             return 1;
         }
 
-        if (argc > 2) {
+        if (argc > 2)
+        {
 
             threadCount = atoi( argv[2] );
         }
 
-        if (threadCount <= 0 || threadCount > 64) {
+        if (threadCount <= 0 || threadCount > 64)
+        {
 
             Usage();
             return 1;
         }
     }
 
-	// Get the system username.
-	char username[USERNAME_NAX_SIZE] = { 0 };
-	BOOLEAN retGetUser = GetSystemUser(username, sizeof(username));
+    // Get the system username.
+    char username[USERNAME_NAX_SIZE] = { 0 };
+    BOOLEAN retGetUser = GetSystemUser(username, sizeof(username));
     if (!retGetUser)
     {
-		printf("Error: Getting the systen username failed\n");
-		return 1;
+        printf("Error: Getting the systen username failed\n");
+        return 1;
     }
 
-	// Hash the username with FNV-1a.
+    // Hash the username with FNV-1a.
     char hashedUsername[FNV_HASH_STR_LEN] = { 0 };
-	Fnv1aHashString(username, hashedUsername);
+    Fnv1aHashString(username, hashedUsername);
+
+	// Initialize the agent listener.
+    if (!InitializeServer(&listenSocket))
+    {
+        return 1;
+    }
+
+	agentServerContext.listenSocket = &listenSocket;
+	agentServerContext.username = hashedUsername;
+
+    // Create a thread to handle client connections.
+    serverThread = CreateThread(NULL, 0, ServerWorker, &agentServerContext, 0, &threadId);
+    if (serverThread == NULL)
+    {
+        printf("ERROR: Couldn't create server thread: %d\n", GetLastError());
+        closesocket(listenSocket);
+        WSACleanup();
+        return 1;
+    }
 
     //
     //  Open a commuication channel to the filter
@@ -483,11 +510,16 @@ main (
     
 main_cleanup:
 
+    WaitForSingleObject(serverThread, INFINITE);
+
     for (INT i = 0; threads[i] != NULL; ++i) {
         WaitForSingleObjectEx(threads[i], INFINITE, FALSE);
     }
-    
+
     printf( "Scanner:  All done. Result = 0x%08x\n", hr );
+
+    closesocket( listenSocket );
+    WSACleanup();
 
     CloseHandle( port );
     CloseHandle( completion );
