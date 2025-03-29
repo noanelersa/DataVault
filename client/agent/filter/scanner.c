@@ -1883,6 +1883,11 @@ Return Value:
                               NULL,
                               NULL );
 
+        // TODO: Validate Magic
+        // Read Magic
+        // Validate Magic
+
+
         if (NT_SUCCESS( status ) && (0 != bytesRead)) {
 
             notification->BytesToScan = (ULONG) bytesRead;
@@ -1897,6 +1902,9 @@ Return Value:
 
             replyLength = sizeof( SCANNER_REPLY );
 
+            // TODO: send the data to the user ScanBufferWithServer at scanUser.c
+            // Change this to send the metadata
+            // Change SCANNER_NOTIFICATION struct
             status = FltSendMessage( ScannerData.Filter,
                                      &ScannerData.ClientPort,
                                      notification,
