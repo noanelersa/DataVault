@@ -436,6 +436,9 @@ main (
     SOCKET listenSocket = INVALID_SOCKET;
     HANDLE serverThread;
 
+    SOCKET listenSocket = INVALID_SOCKET;
+    HANDLE serverThread;
+
     //
     //  Check how many threads and per thread requests are desired.
     //
