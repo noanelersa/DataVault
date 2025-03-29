@@ -25,7 +25,9 @@ Environment:
 #include <ws2tcpip.h>
 #pragma comment(lib, "Ws2_32.lib")
 
-#define DV_AGENT_PORT 2512
+#define DV_AGENT_PORT "2512"
+
+#define MAX_UI_MESSAGE_SIZE 1024
 
 BOOL
 InitializeServer(

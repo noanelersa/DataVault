@@ -8,7 +8,8 @@ BOOL InitializeServer(SOCKET* listenSocket)
 
     // Initialize Winsock
     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
-    if (iResult != 0) {
+    if (iResult != 0)
+    {
         printf("WSAStartup failed with error: %d\n", iResult);
         return FALSE;
     }
@@ -20,8 +21,9 @@ BOOL InitializeServer(SOCKET* listenSocket)
     hints.ai_flags = AI_PASSIVE;
 
     // Resolve the server address and port
-    iResult = getaddrinfo(NULL, "2512", &hints, &result);
-    if (iResult != 0) {
+    iResult = getaddrinfo(NULL, DV_AGENT_PORT, &hints, &result);
+    if (iResult != 0)
+    {
         printf("getaddrinfo failed with error: %d\n", iResult);
         WSACleanup();
         return FALSE;
@@ -29,7 +31,8 @@ BOOL InitializeServer(SOCKET* listenSocket)
 
     // Create a SOCKET for the server to listen for client connections
     *listenSocket = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
-    if (*listenSocket == INVALID_SOCKET) {
+    if (*listenSocket == INVALID_SOCKET) 
+    {
         printf("socket failed with error: %ld\n", WSAGetLastError());
         freeaddrinfo(result);
         WSACleanup();
@@ -38,7 +41,8 @@ BOOL InitializeServer(SOCKET* listenSocket)
 
     // Setup the TCP listening socket
     iResult = bind(*listenSocket, result->ai_addr, (int)result->ai_addrlen);
-    if (iResult == SOCKET_ERROR) {
+    if (iResult == SOCKET_ERROR)
+    {
         printf("bind failed with error: %d\n", WSAGetLastError());
         freeaddrinfo(result);
         closesocket(*listenSocket);
@@ -49,7 +53,8 @@ BOOL InitializeServer(SOCKET* listenSocket)
     freeaddrinfo(result);
 
     iResult = listen(*listenSocket, SOMAXCONN);
-    if (iResult == SOCKET_ERROR) {
+    if (iResult == SOCKET_ERROR)
+    {
         printf("listen failed with error: %d\n", WSAGetLastError());
         closesocket(*listenSocket);
         WSACleanup();
@@ -63,9 +68,8 @@ DWORD WINAPI ServerWorker(LPVOID lpParam)
 {
     SOCKET listenSocket = *(SOCKET*)lpParam;
     SOCKET clientSocket;
-    char recvbuf[512] = { 0 };
+    char recvbuf[MAX_UI_MESSAGE_SIZE] = { 0 };
     int iResult = 0, iSendResult = 0;
-    int recvbuflen = 512;
 
     while (TRUE)
     {
@@ -82,10 +86,10 @@ DWORD WINAPI ServerWorker(LPVOID lpParam)
         // Receive until the peer shuts down the connection.
         do
         {
-            iResult = recv(clientSocket, recvbuf, recvbuflen, 0);
+            iResult = recv(clientSocket, recvbuf, sizeof(recvbuf), 0);
             if (iResult > 0)
             {
-                printf("Bytes received: %d\n", iResult);
+                printf("Bytes received from UI: %d\n", iResult);
 
                 // Echo the buffer back to the sender.
                 iSendResult = send(clientSocket, recvbuf, iResult, 0);
@@ -96,7 +100,7 @@ DWORD WINAPI ServerWorker(LPVOID lpParam)
                     WSACleanup();
                     return 1;
                 }
-                printf("Bytes sent: %d\n", iSendResult);
+                printf("Bytes sent TO UI: %d\n", iSendResult);
             }
             else if (iResult == 0)
             {
@@ -113,7 +117,8 @@ DWORD WINAPI ServerWorker(LPVOID lpParam)
 
         // Shutdown the connection since we're done.
         iResult = shutdown(clientSocket, SD_SEND);
-        if (iResult == SOCKET_ERROR) {
+        if (iResult == SOCKET_ERROR)
+        {
             printf("shutdown failed with error: %d\n", WSAGetLastError());
             closesocket(clientSocket);
             WSACleanup();
