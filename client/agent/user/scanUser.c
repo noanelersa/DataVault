@@ -344,6 +344,7 @@ main (
     PSCANNER_MESSAGE messages;
     DWORD threadId;
     HRESULT hr;
+	AGENT_SERVER_CONTEXT agentServerContext;
 
     SOCKET listenSocket = INVALID_SOCKET;
     HANDLE serverThread;
@@ -377,14 +378,30 @@ main (
         }
     }
 
-    // Initialize the server
+    // Get the system username.
+    char username[USERNAME_NAX_SIZE] = { 0 };
+    BOOLEAN retGetUser = GetSystemUser(username, sizeof(username));
+    if (!retGetUser)
+    {
+        printf("Error: Getting the systen username failed\n");
+        return 1;
+    }
+
+    // Hash the username with FNV-1a.
+    char hashedUsername[FNV_HASH_STR_LEN] = { 0 };
+    Fnv1aHashString(username, hashedUsername);
+
+	// Initialize the agent listener.
     if (!InitializeServer(&listenSocket))
     {
         return 1;
     }
 
-    // Create a thread to handle client connections
-    serverThread = CreateThread(NULL, 0, ServerWorker, &listenSocket, 0, &threadId);
+	agentServerContext.listenSocket = &listenSocket;
+	agentServerContext.username = hashedUsername;
+
+    // Create a thread to handle client connections.
+    serverThread = CreateThread(NULL, 0, ServerWorker, &agentServerContext, 0, &threadId);
     if (serverThread == NULL)
     {
         printf("ERROR: Couldn't create server thread: %d\n", GetLastError());
@@ -392,19 +409,6 @@ main (
         WSACleanup();
         return 1;
     }
-
-	// Get the system username.
-	char username[USERNAME_NAX_SIZE] = { 0 };
-	BOOLEAN retGetUser = GetSystemUser(username, sizeof(username));
-    if (!retGetUser)
-    {
-		printf("Error: Getting the systen username failed\n");
-		return 1;
-    }
-
-	// Hash the username with FNV-1a.
-    char hashedUsername[FNV_HASH_STR_LEN] = { 0 };
-	Fnv1aHashString(username, hashedUsername);
 
     //
     //  Open a commuication channel to the filter
