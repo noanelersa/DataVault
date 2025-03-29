@@ -90,14 +90,45 @@ BOOL ScanBufferWithServer(const char* username)
     // JSON request body
     char jsonData[512] = { 0 };
 
-	// TODO: Make these dynamic.
+    //extracts the username dynamiclly
+    char username[256];
+    DWORD username_len = sizeof(username);
+    if (!GetUserNameA(username, &username_len)){
+        strcpy(username, "UnknownUser");
+    } 
+
+
+	/*
+    // TODO: Make these dynamic.
     LPCSTR action = "1";
     LPCSTR fileID = "123";
+    */
+
+    // get current timestamp
+    time_t rawtime;
+    struct tm timeinfo;
+    char timestamp[64];
+
+    time(&rawtime);
+    localtime_s(&timeinfo, &rawtime);
+    strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", &timeinfo);
+
 
     // Format JSON payload.
     snprintf(jsonData, sizeof(jsonData),
-        "{ \"user\": \"%s\", \"action\": \"%s\", \"fileID\": \"%s\" }",
-        username, action, fileID);
+        "{ \"user\": \"%s\", \"action\": \"%s\", \"fileID\": \"%s\", \"timestamp\": \"%s\" }",
+        username, action, fileID, timestamp);
+
+
+    // log access attempt locally
+    FILE* logFile = fopen("access_log.txt", "a");
+    if (logFile) {
+        fprintf(logFile, "[%s] User: %s | Action: %s | FileID: %s\n", timestamp, username, action, fileID);
+        fclose(logFile);
+    } else {
+        printf("[ERROR] Could not open log file!\n");
+    }
+
 
     // Open HTTP connection
     if (!OpenHttpConnection(hSession, hConnect))
