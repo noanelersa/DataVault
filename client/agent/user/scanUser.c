@@ -30,7 +30,8 @@ Environment:
 #include "scanuser.h"
 #include <dontuse.h>
 
-#include "NetHandler.h"
+#include "ServerNetHandler.h"
+#include "UINetHandler.h"
 #include "Utils.h"
 
 //
@@ -344,11 +345,15 @@ main (
     DWORD threadId;
     HRESULT hr;
 
+    SOCKET listenSocket = INVALID_SOCKET;
+    HANDLE serverThread;
+
     //
     //  Check how many threads and per thread requests are desired.
     //
 
-    if (argc > 1) {
+    if (argc > 1)
+    {
 
         requestCount = atoi( argv[1] );
 
@@ -358,16 +363,34 @@ main (
             return 1;
         }
 
-        if (argc > 2) {
+        if (argc > 2)
+        {
 
             threadCount = atoi( argv[2] );
         }
 
-        if (threadCount <= 0 || threadCount > 64) {
+        if (threadCount <= 0 || threadCount > 64)
+        {
 
             Usage();
             return 1;
         }
+    }
+
+    // Initialize the server
+    if (!InitializeServer(&listenSocket))
+    {
+        return 1;
+    }
+
+    // Create a thread to handle client connections
+    serverThread = CreateThread(NULL, 0, ServerWorker, &listenSocket, 0, &threadId);
+    if (serverThread == NULL)
+    {
+        printf("ERROR: Couldn't create server thread: %d\n", GetLastError());
+        closesocket(listenSocket);
+        WSACleanup();
+        return 1;
     }
 
 	// Get the system username.
@@ -485,11 +508,16 @@ main (
     
 main_cleanup:
 
+    WaitForSingleObject(serverThread, INFINITE);
+
     for (INT i = 0; threads[i] != NULL; ++i) {
         WaitForSingleObjectEx(threads[i], INFINITE, FALSE);
     }
-    
+
     printf( "Scanner:  All done. Result = 0x%08x\n", hr );
+
+    closesocket( listenSocket );
+    WSACleanup();
 
     CloseHandle( port );
     CloseHandle( completion );
