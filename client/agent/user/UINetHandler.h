@@ -29,6 +29,16 @@ Environment:
 
 #define MAX_UI_MESSAGE_SIZE 1024
 
+// UI request types
+#define UI_REQUEST_FILE_REGISTER 1
+
+typedef struct _AGENT_SERVER_CONTEXT {
+
+	SOCKET* listenSocket;
+    char* username;
+
+} AGENT_SERVER_CONTEXT, * PAGENT_SERVER_CONTEXT;
+
 BOOL
 InitializeServer(
     SOCKET* listenSocket);
@@ -36,5 +46,17 @@ InitializeServer(
 DWORD WINAPI 
 ServerWorker(
     LPVOID lpParam);
+
+BOOLEAN 
+HandleUIRequest(
+    char* recvbuf,
+    int recvbuflen,
+    const char* username);
+
+BOOLEAN 
+HandleUIFileRegister(
+    char* recvbuf,
+    int recvbuflen,
+    const char* username);
 
 #endif //  __UI_NET_HANDLER_H__
