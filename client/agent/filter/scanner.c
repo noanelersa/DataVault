@@ -1335,38 +1335,26 @@ Return Value:
     return FLT_PREOP_SUCCESS_NO_CALLBACK;
 }
 
-
+/*++
+Routine Description:
+    Pre read callback. We want to scan the file before allowing the read operation.
+Arguments:
+    Data - The structure which describes the operation parameters.
+    FltObjects - The structure which describes the objects affected by this
+        operation.
+    CompletionContext - Output parameter which can be used to pass a context
+        from this pre-read callback to the post-read callback.
+Return Value:
+    FLT_PREOP_SUCCESS_WITH_CALLBACK - If this is not our user-mode process.
+    FLT_PREOP_SUCCESS_NO_CALLBACK - All other threads.
+--*/
 FLT_PREOP_CALLBACK_STATUS
 ScannerPreRead(
     _Inout_ PFLT_CALLBACK_DATA Data,
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
     _Flt_CompletionContext_Outptr_ PVOID* CompletionContext
 )
-/*++
-
-Routine Description:
-
-    Pre read callback. We want to scan the file before allowing the read operation.
-
-Arguments:
-
-    Data - The structure which describes the operation parameters.
-
-    FltObjects - The structure which describes the objects affected by this
-        operation.
-
-    CompletionContext - Output parameter which can be used to pass a context
-        from this pre-read callback to the post-read callback.
-
-Return Value:
-
-    FLT_PREOP_SUCCESS_WITH_CALLBACK - If this is not our user-mode process.
-    FLT_PREOP_SUCCESS_NO_CALLBACK - All other threads.
-
---*/
 {
-    PSCANNER_STREAM_HANDLE_CONTEXT scannerContext;
-    FLT_POSTOP_CALLBACK_STATUS returnStatus = FLT_POSTOP_FINISHED_PROCESSING;
     PFLT_FILE_NAME_INFORMATION nameInfo;
     NTSTATUS status;
     BOOLEAN safeToOpen, scanFile;
@@ -1377,24 +1365,19 @@ Return Value:
     //  If this create was failing anyway, don't bother scanning now.
     //
 
-    if (!NT_SUCCESS(Data->IoStatus.Status) ||
-        (STATUS_REPARSE == Data->IoStatus.Status)) {
-
-        return FLT_POSTOP_FINISHED_PROCESSING;
+    if (!NT_SUCCESS(Data->IoStatus.Status) || (STATUS_REPARSE == Data->IoStatus.Status))
+    {
+        return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
     //
     //  Check if we are interested in this file.
     //
 
-    status = FltGetFileNameInformation(Data,
-        FLT_FILE_NAME_NORMALIZED |
-        FLT_FILE_NAME_QUERY_DEFAULT,
-        &nameInfo);
-
-    if (!NT_SUCCESS(status)) {
-
-        return FLT_POSTOP_FINISHED_PROCESSING;
+    status = FltGetFileNameInformation(Data, FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_DEFAULT, &nameInfo);
+    if (!NT_SUCCESS(status))
+    {
+        return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
     FltParseFileNameInformation(nameInfo);
@@ -1411,118 +1394,54 @@ Return Value:
 
     FltReleaseFileNameInformation(nameInfo);
 
-    if (!scanFile) {
-
+    if (!scanFile)
+    {
         //
         //  Not an extension we are interested in
         //
 
-        return FLT_POSTOP_FINISHED_PROCESSING;
+        return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
-    (VOID)ScannerpScanFileInUserMode(FltObjects->Instance,
-        FltObjects->FileObject,
-        &safeToOpen);
-
-    if (!safeToOpen) {
-
+    (VOID)ScannerpScanFileInUserMode(FltObjects->Instance, FltObjects->FileObject, &safeToOpen);
+    if (!safeToOpen)
+    {
         //
         //  Ask the filter manager to undo the create.
         //
 
-        DbgPrint("!!! scanner.sys -- foul language detected in postcreate !!!\n");
-
-        DbgPrint("!!! scanner.sys -- undoing create \n");
-
-        FltCancelFileOpen(FltObjects->Instance, FltObjects->FileObject);
-
+        DbgPrint("!!! scanner.sys -- foul language detected in preread !!!\n");
         Data->IoStatus.Status = STATUS_ACCESS_DENIED;
         Data->IoStatus.Information = 0;
-
-        returnStatus = FLT_POSTOP_FINISHED_PROCESSING;
-
-    }
-    else if (FltObjects->FileObject->WriteAccess) {
-
-        //
-        //
-        //  The create has requested write access, mark to rescan the file.
-        //  Allocate the context.
-        //
-
-        status = FltAllocateContext(ScannerData.Filter,
-            FLT_STREAMHANDLE_CONTEXT,
-            sizeof(SCANNER_STREAM_HANDLE_CONTEXT),
-            PagedPool,
-            &scannerContext);
-
-        if (NT_SUCCESS(status)) {
-
-            //
-            //  Set the handle context.
-            //
-
-            scannerContext->RescanRequired = TRUE;
-
-            (VOID)FltSetStreamHandleContext(FltObjects->Instance,
-                FltObjects->FileObject,
-                FLT_SET_CONTEXT_REPLACE_IF_EXISTS,
-                scannerContext,
-                NULL);
-
-            //
-            //  Normally we would check the results of FltSetStreamHandleContext
-            //  for a variety of error cases. However, The only error status
-            //  that could be returned, in this case, would tell us that
-            //  contexts are not supported.  Even if we got this error,
-            //  we just want to release the context now and that will free
-            //  this memory if it was not successfully set.
-            //
-
-            //
-            //  Release our reference on the context (the set adds a reference)
-            //
-
-            FltReleaseContext(scannerContext);
-        }
+        return FLT_PREOP_COMPLETE;
     }
 
-    return returnStatus;
+    return FLT_PREOP_SUCCESS_NO_CALLBACK;
 }
 
-FLT_PREOP_CALLBACK_STATUS
-ScannerPreWrite (
-    _Inout_ PFLT_CALLBACK_DATA Data,
-    _In_ PCFLT_RELATED_OBJECTS FltObjects,
-    _Flt_CompletionContext_Outptr_ PVOID *CompletionContext
-    )
 /*++
-
 Routine Description:
-
     Pre write callback.  We want to scan what's being written now.
-
 Arguments:
-
     Data - The structure which describes the operation parameters.
-
     FltObject - The structure which describes the objects affected by this
         operation.
-
     CompletionContext - Output parameter which can be used to pass a context
         from this pre-write callback to the post-write callback.
-
 Return Value:
-
     Always FLT_PREOP_SUCCESS_NO_CALLBACK.
-
 --*/
+FLT_PREOP_CALLBACK_STATUS
+ScannerPreWrite(
+    _Inout_ PFLT_CALLBACK_DATA Data,
+    _In_ PCFLT_RELATED_OBJECTS FltObjects,
+    _Flt_CompletionContext_Outptr_ PVOID* CompletionContext
+)
 {
-    PSCANNER_STREAM_HANDLE_CONTEXT scannerContext;
-    FLT_POSTOP_CALLBACK_STATUS returnStatus = FLT_POSTOP_FINISHED_PROCESSING;
     PFLT_FILE_NAME_INFORMATION nameInfo;
     NTSTATUS status;
     BOOLEAN safeToOpen, scanFile;
+    PSCANNER_STREAM_HANDLE_CONTEXT scannerContext;
 
     UNREFERENCED_PARAMETER(CompletionContext);
 
@@ -1530,24 +1449,17 @@ Return Value:
     //  If this create was failing anyway, don't bother scanning now.
     //
 
-    if (!NT_SUCCESS(Data->IoStatus.Status) ||
-        (STATUS_REPARSE == Data->IoStatus.Status)) {
-
-        return FLT_POSTOP_FINISHED_PROCESSING;
+    if (!NT_SUCCESS(Data->IoStatus.Status) || (STATUS_REPARSE == Data->IoStatus.Status)) {
+        return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
     //
     //  Check if we are interested in this file.
     //
 
-    status = FltGetFileNameInformation(Data,
-        FLT_FILE_NAME_NORMALIZED |
-        FLT_FILE_NAME_QUERY_DEFAULT,
-        &nameInfo);
-
+    status = FltGetFileNameInformation(Data, FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_DEFAULT, &nameInfo);
     if (!NT_SUCCESS(status)) {
-
-        return FLT_POSTOP_FINISHED_PROCESSING;
+        return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
     FltParseFileNameInformation(nameInfo);
@@ -1564,83 +1476,46 @@ Return Value:
 
     FltReleaseFileNameInformation(nameInfo);
 
-    if (!scanFile) {
-
+    if (!scanFile)
+    {
         //
         //  Not an extension we are interested in
         //
 
-        return FLT_POSTOP_FINISHED_PROCESSING;
+        return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
-    (VOID)ScannerpScanFileInUserMode(FltObjects->Instance,
-        FltObjects->FileObject,
-        &safeToOpen);
-
-    if (!safeToOpen) {
-
+    // Optionally scan the write buffer here instead of file contents
+    (VOID)ScannerpScanFileInUserMode(FltObjects->Instance, FltObjects->FileObject, &safeToOpen);
+    if (!safeToOpen)
+    {
         //
         //  Ask the filter manager to undo the create.
         //
 
-        DbgPrint("!!! scanner.sys -- foul language detected in postcreate !!!\n");
-
-        DbgPrint("!!! scanner.sys -- undoing create \n");
-
-        FltCancelFileOpen(FltObjects->Instance, FltObjects->FileObject);
-
+        DbgPrint("!!! scanner.sys -- foul language detected in prewrite !!!\n");
         Data->IoStatus.Status = STATUS_ACCESS_DENIED;
         Data->IoStatus.Information = 0;
-
-        returnStatus = FLT_POSTOP_FINISHED_PROCESSING;
-
+        return FLT_PREOP_COMPLETE;
     }
-    else if (FltObjects->FileObject->WriteAccess) {
 
-        //
+    if (FltObjects->FileObject->WriteAccess)
+    {
         //
         //  The create has requested write access, mark to rescan the file.
         //  Allocate the context.
         //
 
-        status = FltAllocateContext(ScannerData.Filter,
-            FLT_STREAMHANDLE_CONTEXT,
-            sizeof(SCANNER_STREAM_HANDLE_CONTEXT),
-            PagedPool,
-            &scannerContext);
-
-        if (NT_SUCCESS(status)) {
-
-            //
-            //  Set the handle context.
-            //
-
+        status = FltAllocateContext(ScannerData.Filter, FLT_STREAMHANDLE_CONTEXT, sizeof(SCANNER_STREAM_HANDLE_CONTEXT), PagedPool, &scannerContext);
+        if (NT_SUCCESS(status))
+        {
             scannerContext->RescanRequired = TRUE;
-
-            (VOID)FltSetStreamHandleContext(FltObjects->Instance,
-                FltObjects->FileObject,
-                FLT_SET_CONTEXT_REPLACE_IF_EXISTS,
-                scannerContext,
-                NULL);
-
-            //
-            //  Normally we would check the results of FltSetStreamHandleContext
-            //  for a variety of error cases. However, The only error status
-            //  that could be returned, in this case, would tell us that
-            //  contexts are not supported.  Even if we got this error,
-            //  we just want to release the context now and that will free
-            //  this memory if it was not successfully set.
-            //
-
-            //
-            //  Release our reference on the context (the set adds a reference)
-            //
-
+            (VOID)FltSetStreamHandleContext(FltObjects->Instance, FltObjects->FileObject, FLT_SET_CONTEXT_REPLACE_IF_EXISTS, scannerContext, NULL);
             FltReleaseContext(scannerContext);
         }
     }
 
-    return returnStatus;
+    return FLT_PREOP_SUCCESS_NO_CALLBACK;
 }
 
 #if (WINVER>=0x0602)
