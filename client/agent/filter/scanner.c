@@ -1663,9 +1663,10 @@ Return Value:
 
 {
     NTSTATUS status = STATUS_SUCCESS;
-    PVOID buffer = NULL;
-    PVOID magic_buffer = NULL;
+    PVOID magicBuffer = NULL;
+    PVOID fileIdBuffer = NULL;
     ULONG bytesRead;
+    ULONG bytesReadSave;
     PSCANNER_NOTIFICATION notification = NULL;
     FLT_VOLUME_PROPERTIES volumeProps;
     LARGE_INTEGER offset;
@@ -1722,17 +1723,18 @@ Return Value:
         //  Use non-buffered i/o, so allocate aligned pool
         //
 
-        buffer = FltAllocatePoolAlignedWithTag( Instance,
-                                                NonPagedPool,
-                                                length,
-                                                'nacS' );
-
-		magic_buffer = FltAllocatePoolAlignedWithTag(Instance,
+		magicBuffer = FltAllocatePoolAlignedWithTag(Instance,
 			                                        NonPagedPool,
 			                                        SCANNER_MAGIC_SIZE,
 			                                        'nacS');
 
-        if (NULL == buffer) {
+		fileIdBuffer = FltAllocatePoolAlignedWithTag(Instance,
+			NonPagedPool,
+			SCANNER_FILE_ID_SIZE,
+			'nacS');
+
+
+        if (NULL == magicBuffer || NULL == fileIdBuffer) {
 
             status = STATUS_INSUFFICIENT_RESOURCES;
             leave;
@@ -1754,53 +1756,67 @@ Return Value:
 
         offset.QuadPart = bytesRead = 0;
         
+		// Read Magic Number from the file
         status = FltReadFile(Instance,
             FileObject,
             &offset,
             SCANNER_MAGIC_SIZE,
-            magic_buffer,
+            magicBuffer,
             FLTFL_IO_OPERATION_NON_CACHED |
             FLTFL_IO_OPERATION_DO_NOT_UPDATE_BYTE_OFFSET,
             &bytesRead,
             NULL,
             NULL);
 
-        if (NT_SUCCESS(status)) {
-			if (!RtlCompareMemory(SCANNER_MAGIC, magic_buffer, SCANNER_MAGIC_SIZE)) {
+		// Check if the magic number is present
+        if (NT_SUCCESS(status) && bytesRead == SCANNER_MAGIC_SIZE) {
+			if (!RtlCompareMemory(SCANNER_MAGIC, magicBuffer, SCANNER_MAGIC_SIZE)) {
 				DbgPrint("!!! scanner.sys --- no magic number detected, ignored\n");
 				*SafeToOpen = TRUE;
 				leave;
 			}
-        }
+		}
+        // If the magic number is not present
+		else {
+			DbgPrint("!!! scanner.sys --- magic number not detected, ignored\n");
+			*SafeToOpen = TRUE;
+			leave;
+		}
 
-        status = FltReadFile( Instance,
-                              FileObject,
-                              &offset,
-                              length,
-                              buffer,
-                              FLTFL_IO_OPERATION_NON_CACHED |
-                              FLTFL_IO_OPERATION_DO_NOT_UPDATE_BYTE_OFFSET,
-                              &bytesRead,
-                              NULL,
-                              NULL );
+		offset.QuadPart = bytesReadSave = bytesRead;
+		status = FltReadFile(Instance,
+			FileObject,
+			&offset,
+			SCANNER_FILE_ID_SIZE,
+			fileIdBuffer,
+			FLTFL_IO_OPERATION_NON_CACHED |
+			FLTFL_IO_OPERATION_DO_NOT_UPDATE_BYTE_OFFSET,
+			&bytesRead,
+			NULL,
+			NULL);
 
-        
+		if (bytesRead != SCANNER_FILE_ID_SIZE) {
+			DbgPrint("!!! scanner.sys --- file id not detected, ignored\n");
+			*SafeToOpen = TRUE;
+			leave;
+		}
 
-        if (NT_SUCCESS( status ) && (0 != bytesRead)) {
+		bytesReadSave += bytesRead;
 
-            notification->BytesToScan = (ULONG) bytesRead;
+        if (NT_SUCCESS( status ) && (0 != bytesReadSave)) {
+
+            notification->BytesToScan = (ULONG)bytesReadSave;
 
             //
             //  Copy only as much as the buffer can hold
             //
-
-            RtlCopyMemory( &notification->Contents,
-                           buffer,
-                           min( notification->BytesToScan, SCANNER_READ_BUFFER_SIZE ) );
-
             RtlCopyMemory(&notification->Magic,
-                magic_buffer,
+                magicBuffer,
                 SCANNER_MAGIC_SIZE);
+
+			RtlCopyMemory(&notification->FileId,
+				fileIdBuffer,
+				SCANNER_FILE_ID_SIZE);
 
             replyLength = sizeof( SCANNER_REPLY );
 
@@ -1828,9 +1844,14 @@ Return Value:
 
     } finally {
 
-        if (NULL != buffer) {
+        if (NULL != magicBuffer) {
 
-            FltFreePoolAlignedWithTag( Instance, buffer, 'nacS' );
+            FltFreePoolAlignedWithTag( Instance, magicBuffer, 'nacS' );
+        }
+
+        if (NULL != fileIdBuffer) {
+
+            FltFreePoolAlignedWithTag(Instance, fileIdBuffer, 'nacS');
         }
 
         if (NULL != notification) {

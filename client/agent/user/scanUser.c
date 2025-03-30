@@ -271,9 +271,10 @@ Return Value
         assert(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
         _Analysis_assume_(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
 
-        //result = ScanBuffer( notification->Contents, notification->BytesToScan );
-		//result = ScanBufferWithServer(Context->username); // REMOVE WHEN DONE TESTING
-        printf("Magic is : %c%c%c%c\n", notification->Magic[0], notification->Magic[1], notification->Magic[2], notification->Magic[3]);
+		// TODO: Uncomment this later. ignore server when testing.
+		//result = ScanBufferWithServer(Context->username);
+        printf("Magic is : %.4s\n", notification->Magic);
+        printf("FileId is : %.36s\n", notification->FileId);
 		result = TRUE;
         replyMessage.ReplyHeader.Status = 0;
         replyMessage.ReplyHeader.MessageId = message->MessageHeader.MessageId;
@@ -304,7 +305,7 @@ Return Value
                                &message->Ovlp );
 
         if (hr != HRESULT_FROM_WIN32( ERROR_IO_PENDING )) {
-
+            printf("Scanner: Error 0x%x", ERROR_IO_PENDING);
             break;
         }
     }
