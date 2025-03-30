@@ -272,7 +272,9 @@ Return Value
         _Analysis_assume_(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
 
         //result = ScanBuffer( notification->Contents, notification->BytesToScan );
-        result = ScanBufferWithServer(Context->username);
+		//result = ScanBufferWithServer(Context->username); // REMOVE WHEN DONE TESTING
+        printf("Magic is : %c%c%c%c\n", notification->Magic[0], notification->Magic[1], notification->Magic[2], notification->Magic[3]);
+		result = TRUE;
         replyMessage.ReplyHeader.Status = 0;
         replyMessage.ReplyHeader.MessageId = message->MessageHeader.MessageId;
 

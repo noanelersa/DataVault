@@ -1664,6 +1664,7 @@ Return Value:
 {
     NTSTATUS status = STATUS_SUCCESS;
     PVOID buffer = NULL;
+    PVOID magic_buffer = NULL;
     ULONG bytesRead;
     PSCANNER_NOTIFICATION notification = NULL;
     FLT_VOLUME_PROPERTIES volumeProps;
@@ -1726,6 +1727,11 @@ Return Value:
                                                 length,
                                                 'nacS' );
 
+		magic_buffer = FltAllocatePoolAlignedWithTag(Instance,
+			                                        NonPagedPool,
+			                                        SCANNER_MAGIC_SIZE,
+			                                        'nacS');
+
         if (NULL == buffer) {
 
             status = STATUS_INSUFFICIENT_RESOURCES;
@@ -1747,6 +1753,18 @@ Return Value:
         //
 
         offset.QuadPart = bytesRead = 0;
+        
+        status = FltReadFile(Instance,
+            FileObject,
+            &offset,
+            SCANNER_MAGIC_SIZE,
+            magic_buffer,
+            FLTFL_IO_OPERATION_NON_CACHED |
+            FLTFL_IO_OPERATION_DO_NOT_UPDATE_BYTE_OFFSET,
+            &bytesRead,
+            NULL,
+            NULL);
+
         status = FltReadFile( Instance,
                               FileObject,
                               &offset,
@@ -1757,6 +1775,8 @@ Return Value:
                               &bytesRead,
                               NULL,
                               NULL );
+
+        
 
         if (NT_SUCCESS( status ) && (0 != bytesRead)) {
 
@@ -1769,6 +1789,10 @@ Return Value:
             RtlCopyMemory( &notification->Contents,
                            buffer,
                            min( notification->BytesToScan, SCANNER_READ_BUFFER_SIZE ) );
+
+            RtlCopyMemory(&notification->Magic,
+                magic_buffer,
+                SCANNER_MAGIC_SIZE);
 
             replyLength = sizeof( SCANNER_REPLY );
 
@@ -1814,4 +1838,5 @@ Return Value:
 
     return status;
 }
+
 
