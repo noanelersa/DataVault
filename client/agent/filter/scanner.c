@@ -1765,6 +1765,14 @@ Return Value:
             NULL,
             NULL);
 
+        if (NT_SUCCESS(status)) {
+			if (!RtlCompareMemory(SCANNER_MAGIC, magic_buffer, SCANNER_MAGIC_SIZE)) {
+				DbgPrint("!!! scanner.sys --- no magic number detected, ignored\n");
+				*SafeToOpen = TRUE;
+				leave;
+			}
+        }
+
         status = FltReadFile( Instance,
                               FileObject,
                               &offset,
