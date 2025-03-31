@@ -76,3 +76,73 @@ void PrependToFile(const char* file_path, const char* text, const unsigned int t
         perror("Error renaming temporary file");
     }
 }
+
+char* GetPathFromUI(const char* input) 
+{
+    char* dollar_pos = strchr(input, '$');
+    if (!dollar_pos) 
+    {
+        return NULL; // No '$' found, invalid input
+    }
+
+    size_t path_length = dollar_pos - input;
+
+    char* path = (char*)malloc(path_length + 1);
+    if (!path)
+    {
+        return NULL;
+    }
+
+    strncpy(path, input, path_length);
+    path[path_length] = '\0';
+
+    return path;
+}
+
+char* ParseAccessControl(const char* input)
+{
+    // Find the start of the user list (after the first '$')
+    const char* user_list = strchr(input, '$');
+    if (!user_list || *(user_list + 1) == '\0')
+    {
+        return strdup("[]"); // Return empty JSON array if no users are found
+    }
+    user_list++;
+
+    UserAccess users[100]; // Assume max 100 users for simplicity
+    int user_count = 0;
+
+    char* token = strtok(strdup(user_list), "|");
+    while (token && user_count < 100)
+    {
+        char* semicolon = strchr(token, ';');
+        if (semicolon)
+        {
+            *semicolon = '\0'; // Split username and access
+            users[user_count].access = atoi(semicolon + 1);
+            strncpy(users[user_count].username, token, sizeof(users[user_count].username) - 1);
+            users[user_count].username[sizeof(users[user_count].username) - 1] = '\0';
+            user_count++;
+        }
+        token = strtok(NULL, "|");
+    }
+
+    // Build JSON string
+    char* json_result = (char*)malloc(MAX_JSON_SIZE);
+    if (!json_result) return NULL;
+    strcpy(json_result, "[");
+
+    for (int i = 0; i < user_count; i++) 
+    {
+        char entry[512];
+        snprintf(entry, sizeof(entry), "{\"username\": \"%s\", \"access\": %d}", users[i].username, users[i].access);
+        strcat(json_result, entry);
+        if (i < user_count - 1) 
+        {
+            strcat(json_result, ", ");
+        }
+    }
+
+    strcat(json_result, "]");
+    return json_result;
+}

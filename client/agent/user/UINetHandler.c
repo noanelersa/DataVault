@@ -100,11 +100,9 @@ DWORD WINAPI ServerWorker(LPVOID lpParam)
 
 				// Handle the UI request.
 				BOOLEAN ret = HandleUIRequest(recvbuf, iResult, username);
-				// TODO: Handle the return value.
-				(void)ret;
 
-				// TODO: Send the response to the UI.
-                iSendResult = send(clientSocket, recvbuf, iResult, 0);
+				// Send the response to the UI.
+                iSendResult = send(clientSocket, &((char)ret), iResult, 0);
 
                 if (iSendResult == SOCKET_ERROR)
                 {
@@ -158,7 +156,7 @@ BOOLEAN HandleUIRequest(char* recvbuf, int recvbuflen, const char* username)
     switch (retquestType)
     {
     case UI_REQUEST_FILE_REGISTER:
-        return HandleUIFileRegister(recvbuf, recvbuflen, username);
+        return HandleUIFileRegister((recvbuf+1), (recvbuflen-1), username);
     default:
         printf("Error: Invalid requrest type received from UI: %d\n", retquestType);
         return FALSE;
@@ -170,7 +168,7 @@ BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username
     HINTERNET hSession = NULL, hConnect = NULL, hRequest = NULL;
 
     // JSON request body
-    char jsonData[512] = { 0 };
+    char jsonData[MAX_JSON_SIZE*2] = { 0 };
 
     // At the moment we don't support file hash functionality in the server.
     // Therefore, we use the current time as the file hash for now - in Fnv1a format.
@@ -184,14 +182,16 @@ BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username
 
 	// TODO: Get the ACL from the UI.
     // Follow the API format - USE recvbuf and recvbuflen.
-    const char* acl = "";
-	(void)recvbuf;
-	(void)recvbuflen;
+
+    char* jsonAclString = ParseAccessControl(recvbuf);
 
     // Format JSON payload.
     snprintf(jsonData, sizeof(jsonData),
         "{ \"owner\": \"%s\", \"file-hash\": \"%s\", \"acl\": \"%s\" }",
-        username, fileHash, acl);
+        username, fileHash, jsonAclString);
+
+    // Free the allocated memory.
+    free(jsonAclString);
 
     // Open HTTP connection
     if (!OpenHttpConnection(hSession, hConnect))
@@ -259,23 +259,22 @@ BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username
         printf("Error: InternetReadFile failed with %d in file registeration\n", GetLastError());
     }
 
-	// serverResponse is the file ID only - by API design.
-
-    // Get from the UI.
-    char* protectedFilePath = "";
-
 	char magicFileIDCombined[AGENT_MAGIC_SIZE + AGENT_FILE_ID_SIZE] = { 0 };
 
 	// Combine the magic number and file ID.
 	strncpy(magicFileIDCombined, AGENT_MAGIC, AGENT_MAGIC_SIZE);
 	strncpy(magicFileIDCombined + AGENT_MAGIC_SIZE, serverResponse, AGENT_FILE_ID_SIZE);
 
+    char* protectedFilePath = GetPathFromUI(recvbuf);
+
 	// Prepend the magic number and file ID to the file.
     PrependToFile(protectedFilePath, magicFileIDCombined, sizeof(magicFileIDCombined));
+
+    // Free the allocated memory.
+	free(protectedFilePath);
 
     // Cleanup
     CloseAllHandlers(&hRequest, &hConnect, &hSession);
 
-	// TODO: Deal with further errors.
     return TRUE;
 }
