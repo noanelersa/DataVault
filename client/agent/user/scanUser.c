@@ -93,8 +93,8 @@ BOOL ScanBufferWithServer(const char* username, const char* fileID, const char a
 
     // Format JSON payload.
     snprintf(jsonData, sizeof(jsonData),
-        "{ \"user\": \"%s\", \"action\": \"%c\", \"fileID\": \"%s\" }",
-        username, action, fileID);
+        "{ \"user\": \"%s\", \"action\": \"0\", \"fileID\": \"%.36s\" }",
+        username, fileID);
 
     // Open HTTP connection
     if (!OpenHttpConnection(&hSession, &hConnect))
@@ -268,10 +268,10 @@ Return Value
         assert(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
         _Analysis_assume_(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
 
-		result = ScanBufferWithServer(Context->username, notification->FileId, notification->Action);
+		result = ScanBufferWithServer(Context->username, &notification->FileId, &notification->Action);
         printf("Magic is : %.4s\n", notification->Magic);
         printf("FileId is : %.36s\n", notification->FileId);
-        printf("Action is : %c\n", notification->Action);
+        printf("Action is : %X\n", notification->Action);
         replyMessage.ReplyHeader.Status = 0;
         replyMessage.ReplyHeader.MessageId = message->MessageHeader.MessageId;
 

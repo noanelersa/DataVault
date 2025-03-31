@@ -1817,7 +1817,7 @@ Return Value:
 
 		bytesReadSave += bytesRead;
 
-		notification->Action = action;
+		notification->Action = (CHAR)action;
 		bytesReadSave += sizeof(CHAR);
 
         if (NT_SUCCESS( status ) && (0 != bytesReadSave)) {

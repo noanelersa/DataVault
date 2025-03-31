@@ -187,14 +187,14 @@ BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username
 
     // Format JSON payload.
     snprintf(jsonData, sizeof(jsonData),
-        "{ \"owner\": \"%s\", \"file-hash\": \"%s\", \"acl\": \"%s\" }",
+        "{ \"owner\": \"%s\", \"fileHash\": \"%s\", \"fileName\":\"secret.txt\",\"acl\": %s }",
         username, fileHash, jsonAclString);
 
     // Free the allocated memory.
     free(jsonAclString);
 
     // Open HTTP connection
-    if (!OpenHttpConnection(hSession, hConnect))
+    if (!OpenHttpConnection(&hSession, &hConnect))
     {
         return FALSE;
     }
