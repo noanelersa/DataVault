@@ -31,6 +31,8 @@ Environment:
 // 8 hex digits + null terminator
 #define FNV_HASH_STR_LEN 9
 
+#define TEMP_FILE_PATH "temp_file.tmp"
+
 /*
  * Computes the FNV-1a 32-bit hash of a given input string and stores it as a hex string in output buffer.
  *
@@ -45,6 +47,13 @@ Fnv1aHashString(
 
 BOOLEAN
 GetSystemUser(
-    CHAR* username, const DWORD usernamsSize);
+    CHAR* username,
+    const DWORD usernamsSize);
+
+void 
+PrependToFile(
+    const char* file_path,
+    const char* text, 
+    const unsigned int textLengt);
 
 #endif //  __UTILS_H__

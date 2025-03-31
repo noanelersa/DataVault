@@ -32,6 +32,11 @@ Environment:
 // TODO: Remove when file hsahing is implemented.
 #define TIME_BUFFER_SIZE 64
 
+#define AGENT_FILE_ID_SIZE 36
+
+#define AGENT_MAGIC   "DTVL"
+#define AGENT_MAGIC_SIZE 4
+
 // UI request types
 #define UI_REQUEST_FILE_REGISTER 1
 

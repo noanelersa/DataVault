@@ -247,7 +247,7 @@ BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username
 
     // Read the response.
     // TODO: Change to uuid size (fileId size).
-    char serverResponse[512] = { 0 };
+    char serverResponse[AGENT_FILE_ID_SIZE + 1] = { 0 };
     DWORD bytesRead = 0;
 
 	// TODO: Remove if not needed.
@@ -259,8 +259,19 @@ BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username
         printf("Error: InternetReadFile failed with %d in file registeration\n", GetLastError());
     }
 
-	// TODO: Parse the fileID.
-	// TODO: Save the (magic+fileID) at the start of the file.
+	// serverResponse is the file ID only - by API design.
+
+    // Get from the UI.
+    char* protectedFilePath = "";
+
+	char magicFileIDCombined[AGENT_MAGIC_SIZE + AGENT_FILE_ID_SIZE] = { 0 };
+
+	// Combine the magic number and file ID.
+	strncpy(magicFileIDCombined, AGENT_MAGIC, AGENT_MAGIC_SIZE);
+	strncpy(magicFileIDCombined + AGENT_MAGIC_SIZE, serverResponse, AGENT_FILE_ID_SIZE);
+
+	// Prepend the magic number and file ID to the file.
+    PrependToFile(protectedFilePath, magicFileIDCombined, sizeof(magicFileIDCombined));
 
     // Cleanup
     CloseAllHandlers(&hRequest, &hConnect, &hSession);
