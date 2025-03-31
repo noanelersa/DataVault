@@ -35,9 +35,10 @@ const PWSTR ScannerPortName = L"\\ScannerPort";
 typedef struct _SCANNER_NOTIFICATION {
 
     ULONG BytesToScan;
-    ULONG Reserved;             // for quad-word alignement of the Contents structure
-	UCHAR Magic[SCANNER_MAGIC_SIZE]; // "DTVL"
+    ULONG Reserved;                     // for quad-word alignement of the Contents structure
+	UCHAR Magic[SCANNER_MAGIC_SIZE];    // "DTVL"
 	UCHAR FileId[SCANNER_FILE_ID_SIZE]; // UUID
+    CHAR Action;                        // File action - read/write
     UCHAR Contents[SCANNER_READ_BUFFER_SIZE];
     
 } SCANNER_NOTIFICATION, *PSCANNER_NOTIFICATION;

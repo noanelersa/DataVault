@@ -83,20 +83,16 @@ Return Value
 }
 
 // Function to send JSON data to the server
-BOOL ScanBufferWithServer(const char* username)
+BOOL ScanBufferWithServer(const char* username, const char* fileID, const char action)
 {
     HINTERNET hSession = NULL, hConnect = NULL, hRequest = NULL;
 
     // JSON request body
     char jsonData[512] = { 0 };
 
-	// TODO: Make these dynamic.
-    LPCSTR action = "1";
-    LPCSTR fileID = "123";
-
     // Format JSON payload.
     snprintf(jsonData, sizeof(jsonData),
-        "{ \"user\": \"%s\", \"action\": \"%s\", \"fileID\": \"%s\" }",
+        "{ \"user\": \"%s\", \"action\": \"%c\", \"fileID\": \"%s\" }",
         username, action, fileID);
 
     // Open HTTP connection
@@ -272,10 +268,13 @@ Return Value
         _Analysis_assume_(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
 
 		// TODO: Uncomment this later. ignore server when testing.
-		//result = ScanBufferWithServer(Context->username);
+		//result = ScanBufferWithServer(Context->username, notification->FileId, notification->Action);
         printf("Magic is : %.4s\n", notification->Magic);
         printf("FileId is : %.36s\n", notification->FileId);
+        printf("Action is : %c\n", notification->Action);
+
 		result = TRUE;
+
         replyMessage.ReplyHeader.Status = 0;
         replyMessage.ReplyHeader.MessageId = message->MessageHeader.MessageId;
 

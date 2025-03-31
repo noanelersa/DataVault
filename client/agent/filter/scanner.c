@@ -114,7 +114,8 @@ NTSTATUS
 ScannerpScanFileInUserMode (
     _In_ PFLT_INSTANCE Instance,
     _In_ PFILE_OBJECT FileObject,
-    _Out_ PBOOLEAN SafeToOpen
+    _Out_ PBOOLEAN SafeToOpen,
+    enum EFileAction action
     );
 
 BOOLEAN
@@ -1206,7 +1207,7 @@ Return Value:
 
     (VOID) ScannerpScanFileInUserMode( FltObjects->Instance,
                                        FltObjects->FileObject,
-                                       &safeToOpen );
+                                       &safeToOpen, READ);
 
     if (!safeToOpen) {
 
@@ -1320,7 +1321,7 @@ Return Value:
 
             (VOID) ScannerpScanFileInUserMode( FltObjects->Instance,
                                                FltObjects->FileObject,
-                                               &safe );
+                                               &safe, WRITE);
 
             if (!safe) {
 
@@ -1403,7 +1404,12 @@ ScannerPreRead(
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
-    (VOID)ScannerpScanFileInUserMode(FltObjects->Instance, FltObjects->FileObject, &safeToOpen);
+    (VOID)ScannerpScanFileInUserMode(
+        FltObjects->Instance,
+        FltObjects->FileObject,
+        &safeToOpen,
+        READ);
+
     if (!safeToOpen)
     {
         //
@@ -1486,7 +1492,12 @@ ScannerPreWrite(
     }
 
     // Optionally scan the write buffer here instead of file contents
-    (VOID)ScannerpScanFileInUserMode(FltObjects->Instance, FltObjects->FileObject, &safeToOpen);
+    (VOID)ScannerpScanFileInUserMode(
+        FltObjects->Instance,
+        FltObjects->FileObject,
+        &safeToOpen,
+        WRITE);
+
     if (!safeToOpen)
     {
         //
@@ -1629,7 +1640,8 @@ NTSTATUS
 ScannerpScanFileInUserMode (
     _In_ PFLT_INSTANCE Instance,
     _In_ PFILE_OBJECT FileObject,
-    _Out_ PBOOLEAN SafeToOpen
+    _Out_ PBOOLEAN SafeToOpen,
+	enum EFileAction action
     )
 /*++
 
@@ -1784,6 +1796,8 @@ Return Value:
 		}
 
 		offset.QuadPart = bytesReadSave = bytesRead;
+
+        // Read the fileID from the file.
 		status = FltReadFile(Instance,
 			FileObject,
 			&offset,
@@ -1803,13 +1817,13 @@ Return Value:
 
 		bytesReadSave += bytesRead;
 
+		notification->Action = action;
+		bytesReadSave += sizeof(CHAR);
+
         if (NT_SUCCESS( status ) && (0 != bytesReadSave)) {
 
             notification->BytesToScan = (ULONG)bytesReadSave;
 
-            //
-            //  Copy only as much as the buffer can hold
-            //
             RtlCopyMemory(&notification->Magic,
                 magicBuffer,
                 SCANNER_MAGIC_SIZE);
