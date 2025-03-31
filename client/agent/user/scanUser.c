@@ -97,7 +97,7 @@ BOOL ScanBufferWithServer(const char* username, const char* fileID, const char a
         username, action, fileID);
 
     // Open HTTP connection
-    if (!OpenHttpConnection(hSession, hConnect))
+    if (!OpenHttpConnection(&hSession, &hConnect))
     {
         return FALSE;
     } 
@@ -268,14 +268,10 @@ Return Value
         assert(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
         _Analysis_assume_(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
 
-		// TODO: Uncomment this later. ignore server when testing.
-		//result = ScanBufferWithServer(Context->username, notification->FileId, notification->Action);
+		result = ScanBufferWithServer(Context->username, notification->FileId, notification->Action);
         printf("Magic is : %.4s\n", notification->Magic);
         printf("FileId is : %.36s\n", notification->FileId);
         printf("Action is : %c\n", notification->Action);
-
-		result = TRUE;
-
         replyMessage.ReplyHeader.Status = 0;
         replyMessage.ReplyHeader.MessageId = message->MessageHeader.MessageId;
 
