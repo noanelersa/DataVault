@@ -26,6 +26,14 @@ Environment:
 //
 ///////////////////////////////////////////////////////////////////////////
 
+// File actions - the action will be checked against the user's
+// permissions to determine if the action is allowed.
+enum EFileAction {
+    READ = 0,
+    WRITE,
+
+    NUM_FILE_ACTIONS
+};
 
 typedef struct _SCANNER_DATA {
 
