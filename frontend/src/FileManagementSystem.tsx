@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { Button } from "./components/ui/button";
-import { Bell, Upload, Download, FileText, Users, AlertTriangle, MoreVertical, Share2, UserPlus, Clock, Info, ArrowLeft } from 'lucide-react';
+import { Bell, Upload, Download, FileText, Users, AlertTriangle, MoreVertical, Share2, UserPlus, Clock, Info, ArrowLeft, Settings } from 'lucide-react';
 
 // const socket = io("localhost:2512"); // Connect to the server
 
@@ -12,6 +12,18 @@ const FileManagementSystem = () => {
   const [responseMessage, setResponseMessage] = useState('');
   const fileInputRef = useRef(null);
 
+  const [showPermissionModal, setShowPermissionModal] = useState(false); //modal for editing permissions
+  const [fileForPermissionEdit, setFileForPermissionEdit] = useState(null); //the file we change the permissions to
+  const [editedPermissions, setEditedPermissions] = useState([]); //save the users with updated permissions
+
+  const existingUsers = [
+    { id: 1, name: 'user1' },
+    { id: 2, name: 'user2' },
+    { id: 3, name: 'user3' },
+    { id: 4, name: 'user4' },
+    { id: 5, name: 'admin' },
+  ];
+  
   const [mockFiles, setMockFiles] = useState([
     { 
       id: 1, 
@@ -97,17 +109,19 @@ const FileManagementSystem = () => {
     fileInputRef.current.click();
   };
 
-  const FileDropdown = ({ file }) => (
+
+  const FileDropdown = ({ file }) => { 
+  return (
     <div className="relative" onClick={e => e.stopPropagation()}>
       <Button 
         variant="ghost" 
         size="sm" 
-        onClick={() => setActiveDropdown(activeDropdown === file.id ? null : file.id)}
-      >
+        onClick={() => setActiveDropdown(activeDropdown === file.id ? null : file.id)}>
         <MoreVertical size={16} />
       </Button>
       {activeDropdown === file.id && (
-        <div className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+        <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-82 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50"
+          onClick={(e) => e.stopPropagation()}>   
           <div className="py-1">
             <button className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
               <Share2 size={16} className="mr-2" />
@@ -126,12 +140,195 @@ const FileManagementSystem = () => {
                   <span className="text-xs text-gray-500">{user.access}</span>
                 </div>
               ))}
+              <Button className="flex items-center w-full px-4 py-2 mt-2 text-sm text-gray-700 hover:bg-gray-100"
+              onClick={() => {
+                setFileForPermissionEdit(file);
+                setShowPermissionModal(true);
+              }}>
+                <Settings size={16} className="mr-2" />
+                Edit Permissions
+              </Button>
             </div>
           </div>
         </div>
       )}
-    </div>
-  );
+      {showPermissionModal && fileForPermissionEdit && (
+        <FilePermissions 
+          fileForPermissionEdit={fileForPermissionEdit} 
+          setShowPermissionModal={setShowPermissionModal} 
+          setFileForPermissionEdit={setFileForPermissionEdit} 
+        />
+      )}
+      </div>
+    );
+  };
+
+  const FilePermissions = ({ fileForPermissionEdit }) => {
+    const [showUserDropdown, setShowUserDropdown] = useState(false); //show users who still have no permissions for the selected file
+    const [selectedUserId, setSelectedUserId] = useState(''); 
+    const [selectedUserAccess, setSelectedUserAccess] = useState('read'); 
+  
+    const availableUsers = existingUsers.filter(
+      (user) => !fileForPermissionEdit.sharedWith.some((sharedUser) => sharedUser.id === user.id)
+    );
+  
+    const addExistingUserToFile = (userId, userAccess) => {
+      const user = existingUsers.find(u => u.id === parseInt(userId));
+      if (user) {
+        setEditedPermissions(prevPermissions => {
+          const existingUser = prevPermissions.find(u => u.id === user.id);
+          if (existingUser) {
+            return prevPermissions.map(u => 
+              u.id === user.id ? { ...u, access: userAccess } : u
+            );
+          } else {
+            return [...prevPermissions, { id: user.id, name: user.name, access: userAccess }];
+          }
+        });
+    
+        setFileForPermissionEdit(prev => {
+          return {
+            ...prev,
+            sharedWith: [...prev.sharedWith, { id: user.id, name: user.name, access: userAccess }]
+          };
+        });
+      }
+      setShowUserDropdown(false); 
+    };
+  
+    const handleFileUpdate = () => {
+      if (!fileForPermissionEdit) return;
+    
+        const updatedSharedWith = fileForPermissionEdit.sharedWith.map(user => {
+        const updated = editedPermissions.find(u => u.id === user.id);
+        if (updated) {
+          if (updated.access === 'none') { //remove user with 'none' permissions
+            return null;
+          }
+          return { ...user, access: updated.access };
+        }
+        return user;
+      }).filter(user => user !== null); 
+    
+      const newUsers = editedPermissions.filter(user =>
+        !fileForPermissionEdit.sharedWith.some(sharedUser => sharedUser.id === user.id)
+      ).map(user => ({
+        id: user.id,
+        name: user.name,
+        access: user.access
+      }));
+    
+      const finalSharedWith = [...updatedSharedWith, ...newUsers];
+    
+      setMockFiles(prevFiles =>
+        prevFiles.map(file => {
+          if (file.id === fileForPermissionEdit.id) {
+            return { ...file, sharedWith: finalSharedWith };
+          }
+          return file;
+        })
+      );
+    
+      setShowPermissionModal(false);
+      setEditedPermissions([]);
+    };
+    
+    
+  
+    return (
+      <div className="fixed inset-0 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold">
+              Edit Permissions - {fileForPermissionEdit?.name}
+            </h3>
+          </div>
+  
+          <div className="space-y-2 mb-4">
+            {fileForPermissionEdit?.sharedWith.map((user) => (
+              <div key={user.id} className="flex justify-between items-center">
+                <span>{user.name}</span>
+                <select
+                  className="border rounded p-1 text-sm"
+                  defaultValue={user.access}
+                  onChange={(e) => {
+                    const newAccess = e.target.value;
+  
+                    setEditedPermissions(prev => {
+                      const existing = prev.find(u => u.id === user.id);
+                      if (existing) {
+                        return prev.map(u =>
+                          u.id === user.id ? { ...u, access: newAccess } : u
+                        );
+                      } else {
+                        return [...prev, { id: user.id, access: newAccess }];
+                      }
+                    });
+                  }} >
+                  <option value="read">Read</option>
+                  <option value="write">Write</option>
+                  <option value="manage">Manage</option>
+                  <option value="none">None</option>
+                </select>
+              </div>
+            ))}
+          </div>
+  
+         
+          <div className="space-y-2 mb-4">
+            <Button onClick={() => setShowUserDropdown(!showUserDropdown)}>
+              <UserPlus size={16} className="mr-2" />
+              Grant permissions to a new user
+            </Button>
+  
+           
+            {showUserDropdown && (
+              <div className="space-y-2">
+                <select
+                  className="border rounded p-1 text-sm"
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  value={selectedUserId}
+                >
+                  <option value="">Select a user to add</option>
+                  {availableUsers.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name}
+                    </option>
+                  ))}
+                </select>
+  
+                <select
+                  className="border rounded p-1 text-sm"
+                  onChange={(e) => setSelectedUserAccess(e.target.value)}
+                  value={selectedUserAccess}
+                >
+                  <option value="read">Read</option>
+                  <option value="write">Write</option>
+                  <option value="manage">Manage</option>
+                  <option value="none">None</option>
+                </select>
+  
+                <Button
+                  onClick={() => {
+                    if (selectedUserId) {
+                      addExistingUserToFile(selectedUserId, selectedUserAccess);
+                      setSelectedUserId('');
+                      setSelectedUserAccess('read');
+                    }
+                  }}>
+                  Add User
+                </Button>
+              </div>
+            )}
+          </div>
+  
+          <div className="flex justify-end">
+            <Button onClick={handleFileUpdate}>Save</Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const FileInfoView = ({ file, onBack }) => (
     <div className="space-y-6">
