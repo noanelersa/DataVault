@@ -245,9 +245,30 @@ const FileManagementSystem = () => {
           </div>
   
           <div className="space-y-2 mb-4">
-            {fileForPermissionEdit?.sharedWith.map((user) => (
+            {fileForPermissionEdit?.sharedWith.filter(user => {
+                const edited = editedPermissions.find(u => u.id === user.id);
+                return !(edited && edited.access === 'none'); 
+            })
+            .map((user) => (
               <div key={user.id} className="flex justify-between items-center">
-                <span>{user.name}</span>
+                <div className="flex items-center gap-1">
+                  <Button className="p-1 hover:text-red-700 text-sm font-bold"
+                  onClick={() => {
+                    setEditedPermissions(prev => {
+                      const exists = prev.find(u => u.id === user.id);
+                      if (exists) {
+                        return prev.map(u =>
+                          u.id === user.id ? { ...u, access: 'none' } : u
+                        );
+                      } else {
+                        return [...prev, { id: user.id, access: 'none' }];
+                      }
+                    });
+                  }}>
+                    ×
+                  </Button>
+                  <span>{user.name}</span>
+                </div>
                 <select
                   className="border rounded p-1 text-sm"
                   defaultValue={user.access}
@@ -268,7 +289,6 @@ const FileManagementSystem = () => {
                   <option value="read">Read</option>
                   <option value="write">Write</option>
                   <option value="manage">Manage</option>
-                  <option value="none">None</option>
                 </select>
               </div>
             ))}
@@ -305,7 +325,6 @@ const FileManagementSystem = () => {
                   <option value="read">Read</option>
                   <option value="write">Write</option>
                   <option value="manage">Manage</option>
-                  <option value="none">None</option>
                 </select>
   
                 <Button
