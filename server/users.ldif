@@ -1,0 +1,45 @@
+dn: ou=users,dc=datavault,dc=com
+objectClass: organizationalUnit
+ou: users
+
+dn: uid=roys,ou=users,dc=datavault,dc=com
+objectClass: inetOrgPerson
+cn: Roy Savransky
+sn: Savransky
+uid: roys
+userPassword: rpassword
+
+dn: uid=talc,ou=users,dc=datavault,dc=com
+objectClass: inetOrgPerson
+cn: Tal Cherniavski
+sn: Cherniavski
+uid: talc
+userPassword: tpassword
+
+dn: uid=maorg,ou=users,dc=datavault,dc=com
+objectClass: inetOrgPerson
+cn: Maor Gelman
+sn: Gelman
+uid: maorg
+userPassword: mpassword
+
+dn: uid=taliam,ou=users,dc=datavault,dc=com
+objectClass: inetOrgPerson
+cn: Talia Moshe
+sn: Moshe
+uid: taliam
+userPassword: tpassword
+
+dn: uid=noan,ou=users,dc=datavault,dc=com
+objectClass: inetOrgPerson
+cn: Noa Nelersa
+sn: Nelersa
+uid: noan
+userPassword: npassword
+
+dn: uid=alicem,ou=users,dc=datavault,dc=com
+objectClass: inetOrgPerson
+cn: Alice Mager
+sn: Mager
+uid: alicem
+userPassword: apassword
