@@ -41,12 +41,30 @@ services:
       - pgadmin-data:/var/lib/pgadmin
 
 
+  openldap:
+    image: osixia/openldap:1.5.0
+    container_name: openldap-server
+    environment:
+      - LDAP_ORGANISATION=DataVault
+      - LDAP_DOMAIN=datavault.com
+      - LDAP_ADMIN_PASSWORD=${LDAP_ADMIN_PASSWORD}
+      - LDAP_ADMIN_USER=cn=admin,dc=datavault,dc=com
+    ports:
+      - "389:389"
+      - "636:636"
+    volumes:
+      - ldap-data:/var/lib/ldap
+      - ldap-config:/etc/ldap/slapd.d
+      - ./users.ldif:/users.ldif
+
 networks:
   datavault-network:
     driver: bridge
 
 
 volumes:
+  ldap-data:
+  ldap-config:
   datavault-data:
   pgadmin-data:
   
