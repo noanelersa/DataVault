@@ -265,6 +265,18 @@ Return Value
 
         notification = &message->Notification;
 
+        // Check if we need to print the message.
+        if (notification->Action == 2)
+        {
+            printf("\nOur msg: ");
+            for (int i = 0; i < notification->BytesToScan; i++)
+            {
+                printf("%c ", notification->Contents[i]);
+            }
+			printf("\n");
+            return hr;
+        }
+
         assert(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
         _Analysis_assume_(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
 

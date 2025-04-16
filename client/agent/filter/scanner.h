@@ -31,6 +31,7 @@ Environment:
 enum EFileAction {
     READ = 0,
     WRITE,
+    PRINT,
 
     NUM_FILE_ACTIONS
 };

@@ -1775,7 +1775,59 @@ Return Value:
 //////////////////////////////////////////////////////////////////////////
 //  Local support routines.
 //
-/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////NTSTATUS
+NTSTATUS
+SendPrintToUserMode(
+    _In_ PFLT_PORT ClientPort,
+    _In_ PUNICODE_STRING Param
+)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    PSCANNER_NOTIFICATION notification = NULL;
+    ULONG bytesSent = 0;
+
+    if (ClientPort == NULL)
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    try {
+        // Allocate memory for the notification structure
+        notification = ExAllocatePoolZero(NonPagedPool, sizeof(SCANNER_NOTIFICATION), 'nacS');
+        if (notification == NULL) {
+            status = STATUS_INSUFFICIENT_RESOURCES;
+            leave;
+        }
+
+        // Copy the parameter string into the notification structure
+        RtlCopyMemory(&notification->Contents, Param->Buffer, Param->Length);
+        notification->BytesToScan = Param->Length;
+
+        // Send the message to user mode
+        status = FltSendMessage(ScannerData.Filter,
+            &ClientPort,
+            notification,
+            sizeof(SCANNER_NOTIFICATION),
+            NULL,
+            &bytesSent,
+            NULL);
+
+        // Ignore this value for now.
+        (void)bytesSent;
+
+        if (!NT_SUCCESS(status)) {
+            DbgPrint("!!! scanner.sys --- failed to send message to user mode, status=0x%x\n", status);
+        }
+    }
+    finally {
+        if (notification != NULL) {
+            ExFreePoolWithTag(notification, 'nacS');
+        }
+    }
+
+    return status;
+}
+
 
 NTSTATUS
 ScannerpScanFileInUserMode (
