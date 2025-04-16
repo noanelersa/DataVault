@@ -219,6 +219,23 @@ const FileManagementSystem = () => {
       }));
     
       const finalSharedWith = [...updatedSharedWith, ...newUsers];
+
+      fetch("http://localhost:2513/update-permissions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: fileForPermissionEdit.name,
+          sharedWith: finalSharedWith.map(user => ({
+            name: user.name,
+            access: user.access
+          })),
+        }),
+      })
+      .then(res => res.json())
+      .then(data => console.log("Server response:", data))
+      .catch(err => console.error("Error while sending to server:", err));
     
       setMockFiles(prevFiles =>
         prevFiles.map(file => {
