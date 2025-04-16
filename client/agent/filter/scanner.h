@@ -152,6 +152,13 @@ ScannerPreWrite (
     _Flt_CompletionContext_Outptr_ PVOID *CompletionContext
     );
 
+FLT_PREOP_CALLBACK_STATUS
+PreSetInformation(
+    PFLT_CALLBACK_DATA Data,
+    PCFLT_RELATED_OBJECTS FltObjects,
+    PVOID* CompletionContext
+);
+
 #if (WINVER >= 0x0602)
 
 FLT_PREOP_CALLBACK_STATUS

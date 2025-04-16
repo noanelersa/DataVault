@@ -170,6 +170,12 @@ const FLT_OPERATION_REGISTRATION Callbacks[] = {
       ScannerPreWrite,
       NULL},
 
+    { IRP_MJ_SET_INFORMATION,
+      0,
+      PreSetInformation,
+      NULL
+    },
+
 #if (WINVER>=0x0602)
 
     { IRP_MJ_FILE_SYSTEM_CONTROL,
@@ -1359,50 +1365,45 @@ ScannerPreRead(
     PFLT_FILE_NAME_INFORMATION nameInfo;
     NTSTATUS status;
     BOOLEAN safeToOpen, scanFile;
+    LARGE_INTEGER fileSize;
+    LARGE_INTEGER originalOffset;
+    ULONG originalLength;
+    ULONG bytesRead;
+    LARGE_INTEGER magicOffset = {0};
 
     UNREFERENCED_PARAMETER(CompletionContext);
 
-    //
-    //  If this create was failing anyway, don't bother scanning now.
-    //
+    // Get the original offset and length
+    originalOffset = Data->Iopb->Parameters.Read.ByteOffset;
+    originalLength = Data->Iopb->Parameters.Read.Length;
 
-    if (!NT_SUCCESS(Data->IoStatus.Status) || (STATUS_REPARSE == Data->IoStatus.Status))
-    {
+    // Get file size to ensure we don't read past the end
+    status = FltQueryInformationFile(FltObjects->Instance,
+                                    FltObjects->FileObject,
+                                    &fileSize,
+                                    sizeof(fileSize),
+                                    FileStandardInformation,
+                                    NULL);
+
+    if (!NT_SUCCESS(status)) {
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
-    //
-    //  Check if we are interested in this file.
-    //
-
+    // Continue with normal file scanning logic
     status = FltGetFileNameInformation(Data, FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_DEFAULT, &nameInfo);
-    if (!NT_SUCCESS(status))
-    {
+    if (!NT_SUCCESS(status)) {
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
-    FltParseFileNameInformation(nameInfo);
+    //FltParseFileNameInformation(nameInfo);
 
-    //
-    //  Check if the extension matches the list of extensions we are interested in
-    //
+    //scanFile = ScannerpCheckExtension(&nameInfo->Extension);
 
-    scanFile = ScannerpCheckExtension(&nameInfo->Extension);
+    //FltReleaseFileNameInformation(nameInfo);
 
-    //
-    //  Release file name info, we're done with it
-    //
-
-    FltReleaseFileNameInformation(nameInfo);
-
-    if (!scanFile)
-    {
-        //
-        //  Not an extension we are interested in
-        //
-
-        return FLT_PREOP_SUCCESS_NO_CALLBACK;
-    }
+    //if (!scanFile) {
+    //    return FLT_PREOP_SUCCESS_NO_CALLBACK;
+    //}
 
     (VOID)ScannerpScanFileInUserMode(
         FltObjects->Instance,
@@ -1410,16 +1411,63 @@ ScannerPreRead(
         &safeToOpen,
         READ);
 
-    if (!safeToOpen)
-    {
-        //
-        //  Ask the filter manager to undo the create.
-        //
-
+    if (!safeToOpen) {
         DbgPrint("!!! scanner.sys -- foul language detected in preread !!!\n");
         Data->IoStatus.Status = STATUS_ACCESS_DENIED;
         Data->IoStatus.Information = 0;
         return FLT_PREOP_COMPLETE;
+    }
+
+    PVOID magicBuffer = NULL;
+    LARGE_INTEGER offset;
+
+    magicBuffer = FltAllocatePoolAlignedWithTag(FltObjects->Instance,
+        NonPagedPool,
+        SCANNER_MAGIC_SIZE,
+        'nacS');
+
+    if (NULL == magicBuffer) {
+
+        status = STATUS_INSUFFICIENT_RESOURCES;
+        return status;
+    }
+
+    offset.QuadPart = bytesRead = 0;
+
+    // Read Magic Number from the file
+    status = FltReadFile(FltObjects->Instance,
+        FltObjects->FileObject,
+        &offset,
+        SCANNER_MAGIC_SIZE,
+        magicBuffer,
+        FLTFL_IO_OPERATION_NON_CACHED |
+        FLTFL_IO_OPERATION_DO_NOT_UPDATE_BYTE_OFFSET,
+        &bytesRead,
+        NULL,
+        NULL);
+
+    // Check if the magic number is present
+    if (NT_SUCCESS(status) && bytesRead == SCANNER_MAGIC_SIZE) {
+        if (!RtlCompareMemory(SCANNER_MAGIC, magicBuffer, SCANNER_MAGIC_SIZE)) {
+            DbgPrint("!!! scanner.sys --- no magic number detected, ignored\n");
+            return FLT_PREOP_SUCCESS_NO_CALLBACK;
+        }
+    }
+    // If the magic number is not present
+    else {
+        DbgPrint("!!! scanner.sys --- magic number not detected, ignored\n");
+        return FLT_PREOP_SUCCESS_NO_CALLBACK;
+    }
+
+    LONGLONG* byteOffset = &Data->Iopb->Parameters.Read.ByteOffset.QuadPart;
+
+    if (*byteOffset != FILE_USE_FILE_POINTER_POSITION) {
+        DbgPrint("Original read offset: %llu\n", *byteOffset);
+
+        if (*byteOffset >= 0) {
+            *byteOffset += 40;
+            DbgPrint("Modified read offset: %llu\n", *byteOffset);
+        }
     }
 
     return FLT_PREOP_SUCCESS_NO_CALLBACK;
@@ -1528,6 +1576,99 @@ ScannerPreWrite(
 
     return FLT_PREOP_SUCCESS_NO_CALLBACK;
 }
+
+FLT_PREOP_CALLBACK_STATUS
+PreSetInformation(
+    PFLT_CALLBACK_DATA Data,
+    PCFLT_RELATED_OBJECTS FltObjects,
+    PVOID* CompletionContext
+)
+{
+    UNREFERENCED_PARAMETER(CompletionContext);
+
+    NTSTATUS status = STATUS_SUCCESS;
+    PVOID magicBuffer = NULL;
+    ULONG bytesRead;
+    ULONG bytesReadSave;
+    LARGE_INTEGER offset;
+
+    try {
+        magicBuffer = FltAllocatePoolAlignedWithTag(FltObjects->Instance,
+            NonPagedPool,
+            SCANNER_MAGIC_SIZE,
+            'nacS');
+
+        if (NULL == magicBuffer) {
+
+            status = STATUS_INSUFFICIENT_RESOURCES;
+            leave;
+        }
+
+        //
+        //  Read the beginning of the file and pass the contents to user mode.
+        //
+
+        offset.QuadPart = bytesRead = 0;
+
+        // Read Magic Number from the file
+        status = FltReadFile(FltObjects->Instance,
+            FltObjects->FileObject,
+            &offset,
+            SCANNER_MAGIC_SIZE,
+            magicBuffer,
+            FLTFL_IO_OPERATION_NON_CACHED |
+            FLTFL_IO_OPERATION_DO_NOT_UPDATE_BYTE_OFFSET,
+            &bytesRead,
+            NULL,
+            NULL);
+
+        // Check if the magic number is present
+        if (NT_SUCCESS(status) && bytesRead == SCANNER_MAGIC_SIZE) {
+            if (!RtlCompareMemory(SCANNER_MAGIC, magicBuffer, SCANNER_MAGIC_SIZE)) {
+                DbgPrint("!!! scanner.sys --- no magic number detected, ignored\n");
+                leave;
+            }
+        }
+        // If the magic number is not present
+        else {
+            DbgPrint("!!! scanner.sys --- magic number not detected, ignored\n");
+            leave;
+        }
+
+        ULONG class_type = (ULONG)Data->Iopb->Parameters.SetFileInformation.FileInformationClass;
+
+		switch (class_type)
+		{
+		case FileBasicInformation:
+		case FileRenameInformation:
+			break;
+		default:
+            KeBugCheckEx(0xBEEF0000 + (ULONG)Data->Iopb->Parameters.SetFileInformation.FileInformationClass, 0x1, 0x2, 0x3, 0x4);
+			break;
+		}
+        
+        if (Data->Iopb->Parameters.SetFileInformation.FileInformationClass == FilePositionInformation) {
+            PFILE_POSITION_INFORMATION positionInfo =
+                (PFILE_POSITION_INFORMATION)Data->Iopb->Parameters.SetFileInformation.InfoBuffer;
+            
+            KeBugCheckEx(0xDEADDEAD, 0x1, 0x2, 0x3, 0x4);
+
+            if (positionInfo && FltObjects->FileObject) {
+                
+                positionInfo->CurrentByteOffset.QuadPart += 40;
+            }
+        }
+    } finally {
+
+        if (NULL != magicBuffer) {
+
+            FltFreePoolAlignedWithTag(FltObjects->Instance, magicBuffer, 'nacS' );
+        }
+    }
+    
+    return FLT_PREOP_SUCCESS_NO_CALLBACK;
+}
+
 
 #if (WINVER>=0x0602)
 
