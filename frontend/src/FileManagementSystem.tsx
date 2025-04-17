@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { Button } from "./components/ui/button";
-import { Bell, Upload, Download, FileText, Users, AlertTriangle, MoreVertical, Share2, UserPlus, Clock, Info, ArrowLeft, Settings } from 'lucide-react';
+import { Bell, Upload, Download, FileText, Users, AlertTriangle, MoreVertical, Share2, UserPlus, Clock, Info, ArrowLeft, Settings, Trash2 } from 'lucide-react';
 
 // const socket = io("localhost:2512"); // Connect to the server
 
@@ -443,6 +443,25 @@ const FileManagementSystem = () => {
     </div>
   );
 
+
+  const handleDeleteFile = async (fileID) =>{
+    try {
+      const response = await fetch(`http://localhost:2513/delete/${fileID}`, {
+        method: 'DELETE',
+      });
+  
+      if (response.ok) {
+        console.log("File deleted successfully");
+        setMockFiles(prev => prev.filter(file => file.id !== fileID));
+      } else {
+        console.error("Failed to delete file");
+      }
+    } catch (err) {
+      console.error("Error deleting file:", err);
+    }
+  };
+
+
   const renderFiles = () => (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -481,6 +500,9 @@ const FileManagementSystem = () => {
                   <Button variant="ghost" size="sm"><Download size={16} /></Button>
                   <Button variant="ghost" size="sm" onClick={() => setSelectedFile(file)}>
                     <Info size={16} />
+                  </Button>
+                  <Button onClick = {() =>handleDeleteFile(file.id)}>
+                    <Trash2 size={16}/>
                   </Button>
                   <FileDropdown file={file} />
                 </td>
