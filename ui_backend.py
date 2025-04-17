@@ -7,12 +7,13 @@ app = Flask(__name__)
 
 CORS(app)
 
-BASE_PATH = "C:\\\\Users\\\\cs416\\\\Documents\\\\DataVault\\\\"
+BASE_PATH = "C:\\Users\\cs416\\Documents\\DataVault\\"
 
 class AgentActionType(Enum):
     REGISTER_FILE = 1
     UPDATE_PERMISSIONS = 2
     DELETE_FILE = 3
+
 
 def send_to_agent(data: bytes):
     try:
@@ -44,7 +45,6 @@ def register():
     register_data = serialize_acl(newFile['sharedWith'])
 
     try:
-        register_data = chr(AgentActionType.REGISTER_FILE.value).encode() + f"{BASE_PATH}{newFile['name']}$".encode() + register_data.encode() + b"$"
         send_to_agent(register_data)
         return {"status": "success"}
     except Exception as e:
@@ -59,8 +59,6 @@ def update_permissions():
 
     try:
         register_data = serialize_acl(file_data['sharedWith'])  
-
-        register_data = chr(AgentActionType.UPDATE_PERMISSIONS.value).encode() + f"{BASE_PATH}{file_data['name']}$".encode() + register_data.encode() + b"$"
         send_to_agent(register_data)
         return {"status": "success"}
     except Exception as e:
