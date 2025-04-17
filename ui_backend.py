@@ -7,9 +7,12 @@ app = Flask(__name__)
 
 CORS(app)
 
+BASE_PATH = "C:\\Users\\alice\\Documents\\DT\\"
+
 class AgentActionType(Enum):
     REGISTER_FILE = b"\x01"
     UPDATE_PERMISSIONS = b"\x02"
+    DELETE_FILE = b"\x03"
 
 def send_to_agent(data: bytes):
     try:
@@ -39,7 +42,7 @@ def register():
     register_data = build_shared_with_string(newFile['sharedWith'])
 
     try:
-        register_data = AgentActionType.REGISTER_FILE.value + f"C:\\Users\\Rick\\Documents\\DT\\{newFile['name']}$".encode() + register_data.encode() + b"$"
+        register_data = AgentActionType.REGISTER_FILE.value + f"{BASE_PATH}{newFile['name']}$".encode() + register_data.encode() + b"$"
         send_to_agent(register_data)
         return {"status": "success"}
     except Exception as e:
@@ -55,7 +58,7 @@ def update_permissions():
     try:
         register_data = build_shared_with_string(file_data['sharedWith'])  
 
-        register_data = AgentActionType.UPDATE_PERMISSIONS.value + f"C:\\Users\\Rick\\Documents\\DT\\{file_data['name']}$".encode() + register_data.encode() + b"$"
+        register_data = AgentActionType.UPDATE_PERMISSIONS.value + f"{BASE_PATH}{file_data['name']}$".encode() + register_data.encode() + b"$"
         send_to_agent(register_data)
         return {"status": "success"}
     except Exception as e:
@@ -63,5 +66,16 @@ def update_permissions():
         print(e)
         return {"status": "fail", "error": "Error during permission update process."}, 500
 
+
+@app.route("/delete/<file_id>" , methods=["DELETE"])
+def delete_file(file_id):
+    try:
+        delete_data = AgentActionType.DELETE_FILE.value + f"{BASE_PATH}{file_id}$".encode()
+        send_to_agent(delete_data)
+        return {"status":"success"}
+    except Exception as e:
+        print("Error deleting file:")
+        print(e)
+        return {"status": "fail", "error": "Error during file deleting."}, 500
 
 app.run(host="0.0.0.0", port="2513", debug=True)
