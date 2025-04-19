@@ -42,57 +42,47 @@ export default function FileUploadForm() {
       alert("Please select a file before submitting.");
       return;
     }
-
+  
     const reader = new FileReader();
-
+    
     reader.onload = async () => {
       const fileBuffer = Array.from(new Uint8Array(reader.result));
-
+  
       const filePayload = {
         name: file.name,
         description,
         acl,
-        content: fileBuffer,
+        content: fileBuffer, 
       };
-
+    
       try {
         const response = await window.agentAPI.sendCommand("upload", filePayload);
         console.log("Upload Response:", response);
-
+  
         const uploadedFile = {
-          name: file.name,
-          uploadedBy: "admin",
-          lastAccessed: new Date().toISOString().split("T")[0],
-          accessCount: 0,
+          name: response.name || file.name,
+          uploadedBy: response.uploadedBy || "admin",
+          lastAccessed: response.lastAccessed || new Date().toISOString().split("T")[0],
+          accessCount: response.accessCount || 0,
         };
-
+  
         setFiles((prevFiles) => [...prevFiles, uploadedFile]);
-        alert("File uploaded successfully");
-
+  
+        alert("File uploaded successfully!");
         setFile(null);
         setDescription("");
         setShowUploadForm(false);
-        setAcl([]); 
-        setFileName(""); 
+        setAcl([]);
+        setFileName("");
       } catch (error) {
-        console.error("Upload failed:", error);
-        alert("Error sending file");
+        console.error(error);
+        alert("Error uploading file.");
       }
     };
-
-    reader.readAsArrayBuffer(file);
+  
+    reader.readAsArrayBuffer(file);  
   };
 
-  const notifyAgent = async () => {
-    try {
-      const response = await window.agentAPI.sendCommand('notify');
-      console.log('Response from agent:', response);
-      alert(response.message);
-    } catch (err) {
-      console.error('Failed to notify agent:', err);
-      alert("Failed to notify agent.");
-    }
-  };
 
   return (
     <>
@@ -153,7 +143,6 @@ export default function FileUploadForm() {
               + Add ACL
             </button>
             <button type="submit" className="upload-btn">Upload</button>
-            <button type="button" onClick={notifyAgent} className="upload-btn">Notify Agent</button>
           </div>
         </form>
 
