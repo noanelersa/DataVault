@@ -143,7 +143,6 @@ export default function FileUploadForm() {
               + Add ACL
             </button>
             <button type="submit" className="upload-btn">Upload</button>
-            <button type="button" onClick={notifyAgent} className="upload-btn">Notify Agent</button>
           </div>
         </form>
 
