@@ -1,6 +1,4 @@
 import { useState, useEffect } from "react";
-
-
 import "../styles/FileUploadForm.css";
 
 export default function FileUploadForm() {
@@ -44,50 +42,47 @@ export default function FileUploadForm() {
       alert("Please select a file before submitting.");
       return;
     }
+  
+    const reader = new FileReader();
     
-
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("description", description);
-    formData.append("acl", JSON.stringify(acl)); 
-
-    try {
-      const response = await fetch("http://localhost:8080", {  
-        method: "POST",
-        body: formData,
-      });
-
-      if (response.ok) {
-        const responseData = await response.json();
-        console.log("Upload Response:", responseData);
-
+    reader.onload = async () => {
+      const fileBuffer = Array.from(new Uint8Array(reader.result));
+  
+      const filePayload = {
+        name: file.name,
+        description,
+        acl,
+        content: fileBuffer, 
+      };
+    
+      try {
+        const response = await window.agentAPI.sendCommand("upload", filePayload);
+        console.log("Upload Response:", response);
+  
         const uploadedFile = {
-          name: responseData.name || file.name,
-          uploadedBy: responseData.uploadedBy || "admin", 
-          lastAccessed: responseData.lastAccessed || new Date().toISOString().split("T")[0],
-          accessCount: responseData.accessCount || 0, 
+          name: response.name || file.name,
+          uploadedBy: response.uploadedBy || "admin",
+          lastAccessed: response.lastAccessed || new Date().toISOString().split("T")[0],
+          accessCount: response.accessCount || 0,
         };
-
-        setFiles((prevFiles) => [...prevFiles, uploadedFile]); 
-        console.log("Updated Files State:", files); 
-
+  
+        setFiles((prevFiles) => [...prevFiles, uploadedFile]);
+  
         alert("File uploaded successfully!");
         setFile(null);
         setDescription("");
         setShowUploadForm(false);
-        setAcl([]); 
-        setFileName(""); 
-      } else {
-        alert("Failed to upload file.");
+        setAcl([]);
+        setFileName("");
+      } catch (error) {
+        console.error(error);
+        alert("Error uploading file.");
       }
-    } catch (error) {
-      console.error(error);
-      alert("Error connecting to server.");
-    }
-    
+    };
+  
+    reader.readAsArrayBuffer(file);  
   };
 
-  
 
   return (
     <>
@@ -104,7 +99,6 @@ export default function FileUploadForm() {
               onChange={handleFileChange}
               className="file-input"
             />
-            
             {fileName && <span className="file-name">{fileName}</span>}
           </div>
 
