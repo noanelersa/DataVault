@@ -7,15 +7,18 @@ app = Flask(__name__)
 
 CORS(app)
 
+BASE_PATH = "C:\\Users\\Rick\\Documents\\DT\\"
+
 class AgentActionType(Enum):
-    REGISTER_FILE = b"\x01"
-    UPDATE_PERMISSIONS = b"\x02"
+    REGISTER_FILE = 1
+    UPDATE_PERMISSIONS = 2
+    DELETE_FILE = 3
 
 def send_to_agent(data: bytes):
     try:
         print(data)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.connect(("192.168.20.1", 2512))
+            sock.connect(("192.168.132.131", 2512))
             sock.send(data)
             resp = sock.recv(1024)
             print(resp)
@@ -26,20 +29,20 @@ def send_to_agent(data: bytes):
 
 
 
-def build_shared_with_string(shared_with_list):
+def serialize_acl(acl_list):
     return '|'.join(
         f"{user['name']};{'\x00' if user['access'] == 'read' else '\x01'}"
-        for user in shared_with_list
+        for user in acl_list
     )
 
 
 @app.route("/register", methods=["POST"])
 def register():
     newFile = request.json
-    register_data = build_shared_with_string(newFile['sharedWith'])
+    register_data = serialize_acl(newFile['sharedWith'])
 
     try:
-        register_data = AgentActionType.REGISTER_FILE.value + f"C:\\Users\\Rick\\Documents\\DT\\{newFile['name']}$".encode() + register_data.encode() + b"$"
+        register_data = chr(AgentActionType.REGISTER_FILE.value).encode() + f"{BASE_PATH}{newFile['name']}$".encode() + register_data.encode() + b"$"
         send_to_agent(register_data)
         return {"status": "success"}
     except Exception as e:
@@ -53,9 +56,9 @@ def update_permissions():
     file_data = request.json
 
     try:
-        register_data = build_shared_with_string(file_data['sharedWith'])  
+        register_data = serialize_acl(file_data['sharedWith'])  
 
-        register_data = AgentActionType.UPDATE_PERMISSIONS.value + f"C:\\Users\\Rick\\Documents\\DT\\{file_data['name']}$".encode() + register_data.encode() + b"$"
+        register_data = chr(AgentActionType.UPDATE_PERMISSIONS.value).encode() + f"{BASE_PATH}{file_data['name']}$".encode() + register_data.encode() + b"$"
         send_to_agent(register_data)
         return {"status": "success"}
     except Exception as e:
@@ -63,5 +66,16 @@ def update_permissions():
         print(e)
         return {"status": "fail", "error": "Error during permission update process."}, 500
 
+
+@app.route("/delete/<file_id>" , methods=["DELETE"])
+def delete_file(file_id):
+    try:
+        delete_data = chr(AgentActionType.DELETE_FILE.value).encode() + f"{BASE_PATH}{file_id}$".encode()
+        send_to_agent(delete_data)
+        return {"status":"success"}
+    except Exception as e:
+        print("Error deleting file:")
+        print(e)
+        return {"status": "fail", "error": "Error during file deleting."}, 500
 
 app.run(host="0.0.0.0", port="2513", debug=True)
