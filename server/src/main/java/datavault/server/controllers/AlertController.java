@@ -15,7 +15,7 @@ public class AlertController {
     private AlertService alertService;
 
     @GetMapping//api/alerts
-    public List<AlertEntity> getAllAlerts() {     // Expose Alerts to Agent
+    public List<AlertEntity> getAllAlerts() {
         return alertService.getAllAlerts();
     }
     @GetMapping("/user/{username}")
