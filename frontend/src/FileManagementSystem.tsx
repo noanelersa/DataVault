@@ -1,7 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { Button } from "./components/ui/button";
 import { Bell, Upload, Download, FileText, Users, AlertTriangle, MoreVertical, Share2, UserPlus, Clock, Info, ArrowLeft, Settings, Trash2 } from 'lucide-react';
+import axios from 'axios';
 
 // const socket = io("localhost:2512"); // Connect to the server
 
@@ -17,51 +18,30 @@ const FileManagementSystem = () => {
   const [editedPermissions, setEditedPermissions] = useState([]); //save the users with updated permissions
 
   const existingUsers = [
-    { id: 1, name: 'user1' },
-    { id: 2, name: 'user2' },
-    { id: 3, name: 'user3' },
-    { id: 4, name: 'user4' },
-    { id: 5, name: 'admin' },
+    { id: 1, name: 'roys' },
+    { id: 2, name: 'talc' },
+    { id: 3, name: 'maorg' },
+    { id: 4, name: 'alicem' },
+    { id: 5, name: 'taliam' },
+    { id: 6, name: 'noan' },
   ];
   
-  const [mockFiles, setMockFiles] = useState([
-    { 
-      id: 1, 
-      name: 'report.pdf', 
-      uploadedBy: 'admin', 
-      uploadDate: '2024-12-20 14:30',
-      lastAccessed: '2024-12-26', 
-      accessCount: 3,
-      size: '2.4 MB',
-      type: 'PDF Document',
-      sharedWith: [
-        { id: 1, name: 'user1', access: 'read' },
-        { id: 2, name: 'user2', access: 'write' }
-      ],
-      accessHistory: [
-        { user: 'user1', action: 'viewed', date: '2024-12-26 15:45' },
-        { user: 'user2', action: 'downloaded', date: '2024-12-25 11:20' },
-        { user: 'admin', action: 'modified', date: '2024-12-24 09:15' }
-      ]
-    },
-    { 
-      id: 2, 
-      name: 'data.xlsx', 
-      uploadedBy: 'user1',
-      uploadDate: '2024-12-22 09:15', 
-      lastAccessed: '2024-12-25', 
-      accessCount: 5,
-      size: '1.8 MB',
-      type: 'Excel Spreadsheet',
-      sharedWith: [
-        { id: 3, name: 'user3', access: 'read' }
-      ],
-      accessHistory: [
-        { user: 'user3', action: 'viewed', date: '2024-12-25 16:30' },
-        { user: 'user1', action: 'modified', date: '2024-12-24 14:20' }
-      ]
-    }
-  ]);
+  const [files, setFiles] = useState([]);
+
+  useEffect(() => {
+    const fetchFiles = async () => {
+      try {
+        const response = await axios.get('http://localhost:8080/file'); 
+        console.log("Server response:", response.data); 
+        setFiles(response.data);
+      } catch (error) {
+        console.error('Error fetching files:', error); 
+      }
+    };
+  
+    fetchFiles();
+  }, []);
+  
 
   const handleFileUpload = (e) => {
     const files = e.target.files;
@@ -70,7 +50,7 @@ const FileManagementSystem = () => {
       console.info(`File uploaded: ${file.name}`);
 
       const newFile = {
-        id: mockFiles.length + 1,
+        id: files.length + 1,
         name: file.name,
         uploadedBy: '7075ed12', // assuming current user is admin
         uploadDate: new Date().toISOString().slice(0, 16).replace('T', ' '),
@@ -101,7 +81,7 @@ const FileManagementSystem = () => {
           setResponseMessage('Error sending data');
         });
 
-      setMockFiles([...mockFiles, newFile]);
+        setFiles((prevFiles) => [...prevFiles, newFile]);
     }
   };
 
@@ -237,7 +217,7 @@ const FileManagementSystem = () => {
       .then(data => console.log("Server response:", data))
       .catch(err => console.error("Error while sending to server:", err));
     
-      setMockFiles(prevFiles =>
+      setFiles(prevFiles =>
         prevFiles.map(file => {
           if (file.id === fileForPermissionEdit.id) {
             return { ...file, sharedWith: finalSharedWith };
@@ -452,7 +432,7 @@ const FileManagementSystem = () => {
   
       if (response.ok) {
         console.log("File deleted successfully");
-        setMockFiles(prev => prev.filter(file => file.id !== fileID));
+        setFiles(prev => prev.filter(file => file.id !== fileID));
       } else {
         console.error("Failed to delete file");
       }
@@ -490,7 +470,7 @@ const FileManagementSystem = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {mockFiles.map(file => (
+            {files.map(file => (
               <tr key={file.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{file.name}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{file.uploadedBy}</td>
