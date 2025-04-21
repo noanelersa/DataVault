@@ -1,4 +1,4 @@
-#include "NetHandler.h"
+#include "ServerNetHandler.h"
 
 BOOL OpenHttpConnection(HINTERNET* hSession, HINTERNET* hConnect)
 {
@@ -11,7 +11,7 @@ BOOL OpenHttpConnection(HINTERNET* hSession, HINTERNET* hConnect)
     }
 
     // Open HTTP connection.
-    *hConnect = InternetConnectA(hSession, DV_SERVER_IP, DV_SERVER_PORT, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
+    *hConnect = InternetConnectA(*hSession, DV_SERVER_IP, DV_SERVER_PORT, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
     if (!(*hConnect))
     {
         printf("Error: InternetConnectA failed with %d\n", GetLastError());
