@@ -173,8 +173,12 @@ const FLT_OPERATION_REGISTRATION Callbacks[] = {
     { IRP_MJ_SET_INFORMATION,
       0,
       PreSetInformation,
-      NULL
-    },
+      NULL},
+
+    { IRP_MJ_QUERY_INFORMATION,
+      0,
+      PreQueryInfo,
+      PostQueryInfo},
 
 #if (WINVER>=0x0602)
 
@@ -1448,7 +1452,7 @@ ScannerPreRead(
 
     // Check if the magic number is present
     if (NT_SUCCESS(status) && bytesRead == SCANNER_MAGIC_SIZE) {
-        if (!RtlCompareMemory(SCANNER_MAGIC, magicBuffer, SCANNER_MAGIC_SIZE)) {
+        if (RtlCompareMemory(SCANNER_MAGIC, magicBuffer, SCANNER_MAGIC_SIZE) != SCANNER_MAGIC_SIZE) {
             DbgPrint("!!! scanner.sys --- no magic number detected, ignored\n");
             return FLT_PREOP_SUCCESS_NO_CALLBACK;
         }
@@ -1624,7 +1628,7 @@ PreSetInformation(
 
         // Check if the magic number is present
         if (NT_SUCCESS(status) && bytesRead == SCANNER_MAGIC_SIZE) {
-            if (!RtlCompareMemory(SCANNER_MAGIC, magicBuffer, SCANNER_MAGIC_SIZE)) {
+            if (RtlCompareMemory(SCANNER_MAGIC, magicBuffer, SCANNER_MAGIC_SIZE) != SCANNER_MAGIC_SIZE) {
                 DbgPrint("!!! scanner.sys --- no magic number detected, ignored\n");
                 leave;
             }
@@ -1643,21 +1647,10 @@ PreSetInformation(
 		case FileRenameInformation:
 			break;
 		default:
-            KeBugCheckEx(0xBEEF0000 + (ULONG)Data->Iopb->Parameters.SetFileInformation.FileInformationClass, 0x1, 0x2, 0x3, 0x4);
+            //KeBugCheckEx(0xBEEF0000 + (ULONG)Data->Iopb->Parameters.SetFileInformation.FileInformationClass, 0x1, 0x2, 0x3, 0x4);
 			break;
 		}
         
-        if (Data->Iopb->Parameters.SetFileInformation.FileInformationClass == FilePositionInformation) {
-            PFILE_POSITION_INFORMATION positionInfo =
-                (PFILE_POSITION_INFORMATION)Data->Iopb->Parameters.SetFileInformation.InfoBuffer;
-            
-            KeBugCheckEx(0xDEADDEAD, 0x1, 0x2, 0x3, 0x4);
-
-            if (positionInfo && FltObjects->FileObject) {
-                
-                positionInfo->CurrentByteOffset.QuadPart += 40;
-            }
-        }
     } finally {
 
         if (NULL != magicBuffer) {
@@ -1669,6 +1662,94 @@ PreSetInformation(
     return FLT_PREOP_SUCCESS_NO_CALLBACK;
 }
 
+FLT_PREOP_CALLBACK_STATUS
+PreQueryInfo(
+    PFLT_CALLBACK_DATA Data,
+    PCFLT_RELATED_OBJECTS FltObjects,
+    PVOID* CompletionContext
+)
+{
+    UNREFERENCED_PARAMETER(FltObjects);
+	UNREFERENCED_PARAMETER(CompletionContext);
+
+    if (Data->Iopb->Parameters.QueryFileInformation.FileInformationClass != FileStandardInformation)
+        return FLT_PREOP_SUCCESS_NO_CALLBACK;
+
+    return FLT_PREOP_SUCCESS_WITH_CALLBACK;
+}
+
+
+FLT_POSTOP_CALLBACK_STATUS
+PostQueryInfo(
+    PFLT_CALLBACK_DATA Data,
+    PCFLT_RELATED_OBJECTS FltObjects,
+    PVOID CompletionContext,
+    FLT_POST_OPERATION_FLAGS Flags
+)
+{
+    UNREFERENCED_PARAMETER(FltObjects);
+    UNREFERENCED_PARAMETER(Flags);
+	UNREFERENCED_PARAMETER(CompletionContext);
+
+    PVOID magicBuffer = NULL;
+    ULONG bytesRead = 0;
+	NTSTATUS status = FLT_POSTOP_FINISHED_PROCESSING;
+    LARGE_INTEGER offset = { 0 };
+
+    if (!NT_SUCCESS(Data->IoStatus.Status)) {
+        return FLT_POSTOP_FINISHED_PROCESSING;
+    }
+
+    try {
+		magicBuffer = FltAllocatePoolAlignedWithTag(FltObjects->Instance,
+			NonPagedPool,
+			SCANNER_MAGIC_SIZE,
+			'nacS');
+
+		if (NULL == magicBuffer) {
+			status = FLT_POSTOP_FINISHED_PROCESSING;
+            leave;
+		}
+
+        status = FltReadFile(
+            FltObjects->Instance,
+            FltObjects->FileObject,
+            &offset,
+            SCANNER_MAGIC_SIZE,
+            magicBuffer,
+            FLTFL_IO_OPERATION_NON_CACHED | FLTFL_IO_OPERATION_DO_NOT_UPDATE_BYTE_OFFSET,
+            &bytesRead,
+            NULL,
+            NULL
+        );
+
+        if (RtlCompareMemory(SCANNER_MAGIC, magicBuffer, SCANNER_MAGIC_SIZE) != SCANNER_MAGIC_SIZE)
+        {
+			status = FLT_POSTOP_FINISHED_PROCESSING;
+            leave;
+        }
+
+        if (Data->Iopb->Parameters.QueryFileInformation.FileInformationClass == FileStandardInformation)
+        {
+            PFILE_STANDARD_INFORMATION info =
+                (PFILE_STANDARD_INFORMATION)Data->Iopb->Parameters.QueryFileInformation.InfoBuffer;
+
+            if (info->EndOfFile.QuadPart > 40)
+            {
+                info->EndOfFile.QuadPart -= 10;
+                info->AllocationSize.QuadPart -= 10; // Optional
+                //KeBugCheckEx(0xDEADDEAD, 0x1, 0x2, 0x3, 0x4);
+            }
+        }
+    }
+    finally {
+        if (NULL != magicBuffer) {
+            FltFreePoolAlignedWithTag(FltObjects->Instance, magicBuffer, 'nacS');
+        }
+    }
+    
+    return status;
+}
 
 #if (WINVER>=0x0602)
 
@@ -1975,7 +2056,7 @@ Return Value:
 
 		// Check if the magic number is present
         if (NT_SUCCESS(status) && bytesRead == SCANNER_MAGIC_SIZE) {
-			if (!RtlCompareMemory(SCANNER_MAGIC, magicBuffer, SCANNER_MAGIC_SIZE)) {
+			if (RtlCompareMemory(SCANNER_MAGIC, magicBuffer, SCANNER_MAGIC_SIZE) != SCANNER_MAGIC_SIZE ) {
 				DbgPrint("!!! scanner.sys --- no magic number detected, ignored\n");
 				*SafeToOpen = TRUE;
 				leave;

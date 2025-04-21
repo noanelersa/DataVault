@@ -160,6 +160,21 @@ PreSetInformation(
     PVOID* CompletionContext
 );
 
+FLT_PREOP_CALLBACK_STATUS
+PreQueryInfo(
+    PFLT_CALLBACK_DATA Data,
+    PCFLT_RELATED_OBJECTS FltObjects,
+    PVOID* CompletionContext
+);
+
+FLT_POSTOP_CALLBACK_STATUS
+PostQueryInfo(
+    PFLT_CALLBACK_DATA Data,
+    PCFLT_RELATED_OBJECTS FltObjects,
+    PVOID CompletionContext,
+    FLT_POST_OPERATION_FLAGS Flags
+);
+
 #if (WINVER >= 0x0602)
 
 FLT_PREOP_CALLBACK_STATUS

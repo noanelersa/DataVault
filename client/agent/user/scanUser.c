@@ -280,7 +280,8 @@ Return Value
         assert(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
         _Analysis_assume_(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
 
-		result = ScanBufferWithServer(Context->username, &notification->FileId, &notification->Action);
+		//result = ScanBufferWithServer(Context->username, &notification->FileId, &notification->Action);
+		result = TRUE;
         printf("Magic is : %.4s\n", notification->Magic);
         printf("FileId is : %.36s\n", notification->FileId);
         printf("Action is : %X\n", notification->Action);
