@@ -3,7 +3,7 @@ services:
     image: jerichowalls/server:1.0.0
     container_name: datavault-server
     ports:
-      - "8080:8080"
+      - "10.10.248.113:8080:8080"
     depends_on:
       - db
     environment:
@@ -33,7 +33,7 @@ services:
     container_name: pgadmin4_container
     restart: always
     ports:
-      - "8888:80"
+      - "10.10.248.113:8888:80"
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@admin.com
       PGADMIN_DEFAULT_PASSWORD: strong-password
