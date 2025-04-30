@@ -50,6 +50,30 @@ public class AclService {
 
         aclRepository.saveAllAndFlush(entities);
     }
+    public void updateAcl(FileEntity file, String username, Action newAccessLevel) {
+        UserEntity user = usersService.getUser(username);
+        Optional<AclEntity> existingAcl = aclRepository.findByFileAndUser(file, user);
+
+        if (existingAcl.isPresent()) {
+            AclEntity acl = existingAcl.get();
+            acl.setAccessLevel(newAccessLevel);
+            acl.setGrantedAt(java.sql.Timestamp.from(java.time.Instant.now()));
+            aclRepository.save(acl);
+        } else {
+            AclEntity newAcl = new AclEntity(file, user, newAccessLevel);
+            aclRepository.save(newAcl);
+        }
+    }
+    public void removeAcl(FileEntity file, String username) {
+        UserEntity user = usersService.getUser(username);
+        Optional<AclEntity> acl = aclRepository.findByFileAndUser(file , user);
+
+        if (acl.isPresent()) {
+            aclRepository.delete(acl.get());
+        } else {
+            throw new RuntimeException("ACL entry not found for user " + username + " on file " + file.getFileId());
+        }
+    }
 
     public void checkViolation(FilePostDTO filePostDTO, Action action) {
         UserEntity user = usersService.getUser(filePostDTO.owner());
@@ -70,7 +94,6 @@ public class AclService {
             ));
         }
     }
-
     public Action getUserPermissionForFile(UserEntity user, FileEntity file) {
         Optional<AclEntity> aclEntry = aclRepository.findByUserAndFile(user, file);
         return aclEntry.map(AclEntity::getAccessLevel).orElse(null);
