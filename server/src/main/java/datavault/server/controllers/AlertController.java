@@ -22,6 +22,11 @@ public class AlertController {
     public List<AlertEntity> getAlertsByUsername(@PathVariable String username) {
         return alertService.getAlertsByUsername(username);
     }
+    @GetMapping("/user/id/{userId}")
+    public List<AlertEntity> getAlertsByUserId(@PathVariable Long userId) {
+        return alertService.getAlertsByUserId(userId);
+    }
+
 
     @GetMapping("/action/{action}")
     public List<AlertEntity> getAlertsByAction(@PathVariable String action) {
