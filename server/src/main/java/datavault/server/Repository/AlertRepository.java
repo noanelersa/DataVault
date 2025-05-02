@@ -11,4 +11,8 @@ public interface AlertRepository extends JpaRepository<AlertEntity, Long> {
     List<AlertEntity> findByFile(FileEntity file);
 
     List<AlertEntity> findBySeverity(Integer severity);
+    List<AlertEntity> findByUser_Username(String username);
+    List<AlertEntity> findByUser_UserId(Long userId);
+
+    List<AlertEntity> findByAction(String action);
 }
