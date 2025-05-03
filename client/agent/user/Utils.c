@@ -1,4 +1,6 @@
 #include "Utils.h"
+#include <direct.h>
+#include "UINetHandler.h"
 
 BOOLEAN GetSystemUser(CHAR* username, const DWORD usernamsSize)
 {
@@ -101,7 +103,7 @@ char* GetPathFromUI(const char* input)
 
 char* ParseAccessControl(const char* input)
 {
-    // Find the start of the user list (after the first '$')
+     // Find the start of the user list (after the first '$')
     const char* user_list = strchr(input, '$');
     if (!user_list || *(user_list + 1) == '\0')
     {
@@ -145,4 +147,52 @@ char* ParseAccessControl(const char* input)
 
     strcat(json_result, "]");
     return json_result;
+}
+
+char* ExtractFilePath(const char* input)
+{
+    if (!input) return NULL;
+
+    const char* dollar = strchr(input, '$'); //Find the first occurrence of the '$'.
+    if (!dollar) return NULL;
+
+    size_t length = (size_t)(dollar - input);
+    if (length == 0 || length > 256)  
+        return NULL;
+
+    char* fileId = (char*)malloc(length + 1);
+    if (!fileId) return NULL;
+
+    strncpy(fileId, input, length);
+    fileId[length] = '\0';
+
+    return fileId;
+}
+
+char* ExtractFileIdFromFile(char* path) {
+    
+    static char sanitizedFileId[AGENT_FILE_ID_SIZE + 1]; 
+    
+    FILE *file = fopen(path, "r");
+    if (!file) {
+        return NULL; 
+    }
+
+    char buffer[1024];
+    size_t bytesRead = fread(buffer, 1, sizeof(buffer), file);
+    fclose(file);
+
+    if (strstr(buffer, "DTVL") == NULL) {
+        return NULL; 
+    }
+
+    char *fileIdStart = strstr(buffer, "DTVL") + 4; 
+    if (!fileIdStart) {
+        return NULL; 
+    }
+
+    strncpy(sanitizedFileId, fileIdStart, AGENT_FILE_ID_SIZE);
+    sanitizedFileId[AGENT_FILE_ID_SIZE] = '\0';  
+
+    return sanitizedFileId;
 }

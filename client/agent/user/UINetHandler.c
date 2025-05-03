@@ -157,6 +157,8 @@ BOOLEAN HandleUIRequest(char* recvbuf, int recvbuflen, const char* username)
     {
     case UI_REQUEST_FILE_REGISTER:
         return HandleUIFileRegister((recvbuf+1), (recvbuflen-1), username);
+    case UI_REQUEST_UPDATE_PERMISSIONS:
+        return HandleUIUpdatePermissions((recvbuf + 1), (recvbuflen - 1), username);
     default:
         printf("Error: Invalid requrest type received from UI: %d\n", retquestType);
         return FALSE;
@@ -275,6 +277,125 @@ BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username
 
     // Cleanup
     CloseAllHandlers(&hRequest, &hConnect, &hSession);
+
+    return TRUE;
+}
+
+BOOLEAN HandleUIUpdatePermissions(char* recvbuf, int recvbuflen, const char* username){
+
+    HINTERNET hSession = NULL, hConnect = NULL, hRequest = NULL;
+
+    char* extractedPath = ExtractFilePath(recvbuf);
+    char* jsonAcl = ParseAccessControl(recvbuf);
+
+    
+    char *fileId = ExtractFileIdFromFile(extractedPath);
+    
+    if (!extractedPath || !jsonAcl) {
+        printf("Error: Failed to parse input data.\n");
+        if (extractedPath) free(extractedPath);
+        if (jsonAcl) free(jsonAcl);
+        return FALSE;
+    }
+
+    if (!OpenHttpConnection(&hSession, &hConnect)) {
+        printf("Error: Failed to open HTTP connection.\n");
+        free(extractedPath);
+        free(jsonAcl);
+        return FALSE;
+    }
+    
+    char* aclCopy = strdup(jsonAcl);
+    if (!aclCopy) {
+        printf("Error: Memory allocation failed for aclCopy.\n");
+        CloseAllHandlers(&hRequest, &hConnect, &hSession);
+        free(extractedPath);
+        free(jsonAcl);
+        return FALSE;
+    }
+    
+    char* entry = strstr(aclCopy, "{\"username\":");
+    while (entry) {
+        char username[128] = {0};
+        int access = -1;
+    
+        // Extract username
+        char* usernameKey = strstr(entry, "\"username\":");
+        if (!usernameKey) break;
+    
+        char* uStart = strchr(usernameKey + 10, '\"');
+        if (!uStart) break;
+    
+        char* uEnd = strchr(uStart + 1, '\"');
+        if (!uEnd) break;
+    
+        size_t uLen = uEnd - (uStart + 1);
+        if (uLen >= sizeof(username)) uLen = sizeof(username) - 1;
+        strncpy(username, uStart + 1, uLen);
+        username[uLen] = '\0';
+    
+        printf("Extracted username: %s\n", username);
+    
+        // Extract access level
+        char* accessStr = strstr(uEnd, "\"access\":");
+        if (!accessStr) break;
+    
+        access = atoi(accessStr + 9);
+        printf("Extracted access level for %s: %d\n", username, access);
+    
+        char endpoint[256];
+        snprintf(endpoint, sizeof(endpoint), "/acl/%s/%s", fileId, username);
+        printf("Requesting endpoint: %s\n", endpoint);
+    
+        char body[128];
+        snprintf(body, sizeof(body), "{ \"access\": %d }", access);
+        printf("Sending JSON body: %s\n", body);
+    
+        // Send request
+        hRequest = HttpOpenRequestA(hConnect, "PUT", endpoint, NULL, NULL, NULL,
+                                    INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 0);
+        if (!hRequest) {
+            printf("Error: HttpOpenRequestA failed with %d\n", GetLastError());
+            break;
+        }
+    
+        char headers[512];
+        snprintf(headers, sizeof(headers),
+                 "Host: %s:%d\r\nContent-Type: application/json\r\nAccept: */*\r\n",
+                 DV_SERVER_IP, DV_SERVER_PORT);
+    
+        DWORD headersLen = (DWORD)strlen(headers);
+        DWORD bodyLen = (DWORD)strlen(body);
+    
+        if (!HttpSendRequestA(hRequest, headers, headersLen, body, bodyLen)) {
+            printf("Error: HttpSendRequestA failed with %d\n", GetLastError());
+            InternetCloseHandle(hRequest);
+            hRequest = NULL;
+            break;
+        }
+    
+        DWORD statusCode = 0;
+        DWORD statusCodeSize = sizeof(statusCode);
+        if (!HttpQueryInfoA(hRequest, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER,
+                            &statusCode, &statusCodeSize, NULL)) {
+            printf("Error: HttpQueryInfoA failed with %d\n", GetLastError());
+            InternetCloseHandle(hRequest);
+            hRequest = NULL;
+            break;
+        }
+    
+        printf("Server responded for user %s with status code: %lu\n", username, statusCode);
+    
+        InternetCloseHandle(hRequest);
+        hRequest = NULL;
+    
+        entry = strstr(uEnd, "{\"username\":");
+    }    
+
+    CloseAllHandlers(&hRequest, &hConnect, &hSession);
+    free(extractedPath);
+    free(jsonAcl);
+    free(aclCopy);
 
     return TRUE;
 }
