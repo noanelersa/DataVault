@@ -8,11 +8,21 @@ package datavault.server.enums;
  * MANAGE - When someone tries to change the ACL of the file
  */
 public enum Action {
-    READ,
-    WRITE,
-    MANAGE,
-    SCREENSHOT,
-    DELETE;
+    READ(1),
+    WRITE(2),
+    MANAGE(3),
+    SCREENSHOT(2),
+    DELETE(3);
+
+    private int severity;
+
+    Action(int sev) {
+        this.severity = sev;
+    }
+
+    public int getSeverity() {
+        return severity;
+    }
 
     public static Action forName(String name) {
         for (Action action : values()) {

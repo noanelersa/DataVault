@@ -14,14 +14,14 @@ public class AlertService {
     AlertRepository alertRepository;
 
     public void saveDuplicateFile(FileEntity file, UserEntity user, Action action) {
-        AlertEntity alert = new AlertEntity(file, user, action, 3,
+        AlertEntity alert = new AlertEntity(file, user, action,
                 "The user tried to register the file again");
 
         alertRepository.save(alert);
     }
 
     public void saveAlert(FileEntity file, UserEntity user, Action action) {
-        AlertEntity alert = new AlertEntity(file, user, action, 2,
+        AlertEntity alert = new AlertEntity(file, user, action,
                 "The user violated acl");
         alertRepository.save(alert);
     }
