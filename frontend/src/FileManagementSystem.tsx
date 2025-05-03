@@ -114,8 +114,9 @@ const FileManagementSystem = () => {
           'Content-Type': 'application/json'
         }
       })
-        .then((response) => alerts = await response.json())
+        .then((response) => response.json())
         .then((data) => {
+          alerts = data
           console.log('Response:', data);
         })
         .catch((error) => {
@@ -581,7 +582,7 @@ const FileManagementSystem = () => {
         ) : (
           {
             'files': renderFiles(),
-            'my alerts': renderMyAlerts(),
+            'alerts': renderMyAlerts(),
             'users': renderUsers(),
           }[page]
         )}
