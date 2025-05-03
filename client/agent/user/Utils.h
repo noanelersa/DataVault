@@ -73,4 +73,12 @@ char*
 ParseAccessControl(
     const char* input);
 
+char*
+ExtractFilePath(
+    const char* input);
+
+char*
+ ExtractFileIdFromFile(
+    char* path);
+
 #endif //  __UTILS_H__
