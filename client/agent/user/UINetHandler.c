@@ -344,7 +344,7 @@ BOOLEAN HandleUIUpdatePermissions(char* recvbuf, int recvbuflen, const char* use
         printf("Extracted access level for %s: %d\n", username, access);
     
         char endpoint[256];
-        snprintf(endpoint, sizeof(endpoint), "/acl/%s/%s", fileId, username);
+        snprintf(endpoint, sizeof(endpoint), "/acl/%s/%s/%d", fileId, username, access);
         printf("Requesting endpoint: %s\n", endpoint);
     
         char body[128];
