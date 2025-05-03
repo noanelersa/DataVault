@@ -7,9 +7,10 @@ app = Flask(__name__)
 
 CORS(app)
 
-BASE_PATH = "C:\\Users\\cs416\\Documents\\DataVault\\"
+BASE_PATH = "C:\\Users\\alice\\Documents\\DT\\"
 
 class AgentActionType(Enum):
+
     REGISTER_FILE = 1
     UPDATE_PERMISSIONS = 2
     DELETE_FILE = 3
@@ -33,7 +34,7 @@ def send_to_agent(data: bytes):
 
 def serialize_acl(acl_list):
     return '|'.join(
-        f"{user['name']};{'\x00' if user['access'] == 'read' else '\x01'}"
+        f"{user['name']};{'0' if user['access'] == 'read' else '1'}"
         for user in acl_list
     )
 
@@ -77,5 +78,5 @@ def delete_file(file_name):
         print("Error deleting file:")
         print(e)
         return {"status": "fail", "error": "Error during file deleting."}, 500
-
+    
 app.run(host="0.0.0.0", port="2513", debug=True)
