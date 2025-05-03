@@ -23,6 +23,8 @@ const FileManagementSystem = () => {
     { id: 4, name: 'user4' },
     { id: 5, name: 'admin' },
   ];
+
+  let alerts = []
   
   const [mockFiles, setMockFiles] = useState([
     { 
@@ -102,6 +104,24 @@ const FileManagementSystem = () => {
         });
 
       setMockFiles([...mockFiles, newFile]);
+    }
+  };
+
+  const getMyAlerts = () => {
+      fetch('http://localhost:2513/alerts/user/7075ed12', {
+        method: 'GET', 
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+        .then((response) => alerts = await response.json())
+        .then((data) => {
+          console.log('Response:', data);
+        })
+        .catch((error) => {
+          console.error('Error:', error);
+          setResponseMessage('Error sending data');
+        });
     }
   };
 
@@ -496,10 +516,7 @@ const FileManagementSystem = () => {
     <div className="space-y-4">
       <h2 className="text-2xl font-bold">Alerts</h2>
       <div className="space-y-2">
-        {[
-          { id: 1, message: 'User1 accessed report.pdf', time: '2 hours ago' },
-          { id: 2, message: 'User2 downloaded data.xlsx', time: '1 day ago' }
-        ].map(alert => (
+        {alerts.map(alert => (
           <div key={alert.id} className="flex items-center p-4 border rounded bg-white">
             <AlertTriangle className="mr-2 text-yellow-500" size={16} />
             <div>
@@ -564,7 +581,7 @@ const FileManagementSystem = () => {
         ) : (
           {
             'files': renderFiles(),
-            'alerts': renderAlerts(),
+            'my alerts': renderMyAlerts(),
             'users': renderUsers(),
           }[page]
         )}
