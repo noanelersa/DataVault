@@ -22,6 +22,7 @@ def send_to_agent(data: bytes):
             sock.send(data)
             resp = sock.recv(1024)
             print(resp)
+            sock.shutdown(socket.SHUT_RDWR)
     except Exception as e:
         print("Error communicating with agent:")
         print(e)
@@ -34,6 +35,7 @@ def serialize_acl(acl_list):
         f"{user['name']};{'\x00' if user['access'] == 'read' else '\x01'}"
         for user in acl_list
     )
+
 
 
 @app.route("/register", methods=["POST"])
