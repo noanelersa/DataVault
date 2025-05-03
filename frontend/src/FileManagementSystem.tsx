@@ -123,8 +123,7 @@ const FileManagementSystem = () => {
           console.error('Error:', error);
           setResponseMessage('Error sending data');
         });
-    }
-  };
+    };
 
   const triggerFileInput = () => {
     fileInputRef.current.click();
@@ -566,7 +565,9 @@ const FileManagementSystem = () => {
               <Button variant={page === 'files' ? 'default' : 'ghost'} onClick={() => setPage('files')}>
                 <FileText className="mr-2" size={16} /> Files
               </Button>
-              <Button variant={page === 'alerts' ? 'default' : 'ghost'} onClick={() => setPage('alerts')}>
+              <Button variant={page === 'alerts' ? 'default' : 'ghost'} onClick={() => {
+                getMyAlerts()
+                setPage('alerts')}}>
                 <Bell className="mr-2" size={16} /> Alerts
               </Button>
               <Button variant={page === 'users' ? 'default' : 'ghost'} onClick={() => setPage('users')}>
@@ -582,7 +583,7 @@ const FileManagementSystem = () => {
         ) : (
           {
             'files': renderFiles(),
-            'alerts': renderMyAlerts(),
+            'alerts': renderAlerts(),
             'users': renderUsers(),
           }[page]
         )}
