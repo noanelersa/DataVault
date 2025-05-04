@@ -30,6 +30,7 @@ const PWSTR ScannerPortName = L"\\ScannerPort";
 #define SCANNER_MAGIC   "DTVL"
 #define SCANNER_MAGIC_SIZE 4
 #define SCANNER_FILE_ID_SIZE 36
+#define SCANNER_ACTION_SIZE 1
 #define SCANNER_READ_BUFFER_SIZE   1024
 
 typedef struct _SCANNER_NOTIFICATION {
@@ -38,7 +39,7 @@ typedef struct _SCANNER_NOTIFICATION {
     ULONG Reserved;                     // for quad-word alignement of the Contents structure
 	UCHAR Magic[SCANNER_MAGIC_SIZE];    // "DTVL"
 	UCHAR FileId[SCANNER_FILE_ID_SIZE]; // UUID
-    CHAR Action;                        // File action - read/write
+    UCHAR Action[SCANNER_ACTION_SIZE];  // File action - read/write
     UCHAR Contents[SCANNER_READ_BUFFER_SIZE];
     
 } SCANNER_NOTIFICATION, *PSCANNER_NOTIFICATION;

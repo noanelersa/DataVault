@@ -271,7 +271,7 @@ Return Value
 		result = ScanBufferWithServer(Context->username, &notification->FileId, &notification->Action);
         printf("Magic is : %.4s\n", notification->Magic);
         printf("FileId is : %.36s\n", notification->FileId);
-        printf("Action is : %X\n", notification->Action);
+        printf("Action is : %c\n", notification->Action[0]);
         replyMessage.ReplyHeader.Status = 0;
         replyMessage.ReplyHeader.MessageId = message->MessageHeader.MessageId;
 

@@ -1677,8 +1677,9 @@ Return Value:
     NTSTATUS status = STATUS_SUCCESS;
     PVOID magicBuffer = NULL;
     PVOID fileIdBuffer = NULL;
-    ULONG bytesRead;
-    ULONG bytesReadSave;
+    PVOID actionBuffer = NULL;
+    ULONG bytesRead = 0;
+    ULONG bytesReadSave = 0;
     PSCANNER_NOTIFICATION notification = NULL;
     FLT_VOLUME_PROPERTIES volumeProps;
     LARGE_INTEGER offset;
@@ -1745,8 +1746,12 @@ Return Value:
 			SCANNER_FILE_ID_SIZE,
 			'nacS');
 
+        actionBuffer = FltAllocatePoolAlignedWithTag(Instance,
+            NonPagedPool,
+            SCANNER_ACTION_SIZE,
+            'nacS');
 
-        if (NULL == magicBuffer || NULL == fileIdBuffer) {
+        if (NULL == magicBuffer || NULL == fileIdBuffer || NULL == actionBuffer) {
 
             status = STATUS_INSUFFICIENT_RESOURCES;
             leave;
@@ -1817,10 +1822,13 @@ Return Value:
 
 		bytesReadSave += bytesRead;
 
-		notification->Action = (CHAR)action;
-		bytesReadSave += sizeof(CHAR);
+        ULONG bytesReadSave = SCANNER_MAGIC_SIZE + SCANNER_FILE_ID_SIZE + SCANNER_ACTION_SIZE;
 
-        if (NT_SUCCESS( status ) && (0 != bytesReadSave)) {
+        if (NT_SUCCESS( status ) && (SCANNER_MAGIC_SIZE + SCANNER_FILE_ID_SIZE != bytesReadSave)) {
+
+            CHAR actionChar = (CHAR)action;
+            actionBuffer = &actionChar;
+			bytesReadSave += SCANNER_ACTION_SIZE;
 
             notification->BytesToScan = (ULONG)bytesReadSave;
 
@@ -1831,6 +1839,10 @@ Return Value:
 			RtlCopyMemory(&notification->FileId,
 				fileIdBuffer,
 				SCANNER_FILE_ID_SIZE);
+
+            RtlCopyMemory(&notification->Action,
+                actionBuffer,
+                SCANNER_ACTION_SIZE);
 
             replyLength = sizeof( SCANNER_REPLY );
 
@@ -1866,6 +1878,11 @@ Return Value:
         if (NULL != fileIdBuffer) {
 
             FltFreePoolAlignedWithTag(Instance, fileIdBuffer, 'nacS');
+        }
+
+        if (NULL != actionBuffer) {
+
+            FltFreePoolAlignedWithTag(Instance, actionBuffer, 'nacS');
         }
 
         if (NULL != notification) {
