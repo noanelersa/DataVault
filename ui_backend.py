@@ -69,10 +69,14 @@ def update_permissions():
         return {"status": "fail", "error": "Error during permission update process."}, 500
 
 
-@app.route("/delete/<file_id>" , methods=["DELETE"])
-def delete_file(file_id):
+@app.route("/delete/<file_name>" , methods=["DELETE"])
+def delete_file(file_name):
     try:
+<<<<<<< HEAD
         delete_data = chr(AgentActionType.DELETE_FILE.value).encode() + f"{BASE_PATH}{file_id}$".encode()
+=======
+        delete_data = AgentActionType.DELETE_FILE.value.to_bytes(1,byteorder='big') + f"{BASE_PATH}{file_name}$".encode()
+>>>>>>> 4853756 (fix(delete): send full file name instead of index to agent)
         send_to_agent(delete_data)
         return {"status":"success"}
     except Exception as e:
