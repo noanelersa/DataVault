@@ -424,15 +424,15 @@ const FileManagementSystem = () => {
   );
 
 
-  const handleDeleteFile = async (fileID) =>{
+  const handleDeleteFile = async (fileName) =>{
     try {
-      const response = await fetch(`http://localhost:2513/delete/${fileID}`, {
+      const response = await fetch(`http://localhost:2513/delete/${fileName}`, {
         method: 'DELETE',
       });
   
       if (response.ok) {
         console.log("File deleted successfully");
-        setFiles(prev => prev.filter(file => file.id !== fileID));
+        setFiles(prev => prev.filter(file => file.name !== fileName));
       } else {
         console.error("Failed to delete file");
       }
@@ -481,7 +481,7 @@ const FileManagementSystem = () => {
                   <Button variant="ghost" size="sm" onClick={() => setSelectedFile(file)}>
                     <Info size={16} />
                   </Button>
-                  <Button onClick = {() =>handleDeleteFile(file.id)}>
+                  <Button onClick = {() =>handleDeleteFile(file.name)}>
                     <Trash2 size={16}/>
                   </Button>
                   <FileDropdown file={file} />
