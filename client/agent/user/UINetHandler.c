@@ -159,6 +159,8 @@ BOOLEAN HandleUIRequest(char* recvbuf, int recvbuflen, const char* username)
         return HandleUIFileRegister((recvbuf+1), (recvbuflen-1), username);
     case UI_REQUEST_UPDATE_PERMISSIONS:
         return HandleUIUpdatePermissions((recvbuf + 1), (recvbuflen - 1), username);
+    case UI_REQUEST_DELETE_FILE:
+        return HandleUIDeleteFile((recvbuf + 1), (recvbuflen - 1), username);
     default:
         printf("Error: Invalid requrest type received from UI: %d\n", retquestType);
         return FALSE;
@@ -398,4 +400,76 @@ BOOLEAN HandleUIUpdatePermissions(char* recvbuf, int recvbuflen, const char* use
     free(aclCopy);
 
     return TRUE;
+}
+
+BOOLEAN HandleUIDeleteFile(char* recvbuf, int recvbuflen, const char* username) {
+
+    HINTERNET hSession = NULL, hConnect = NULL, hRequest = NULL;
+
+    char* extractedPath = ExtractFilePath(recvbuf);
+
+    printf("Extracted file path: %s\n", extractedPath);
+    if (!extractedPath) {
+        printf("Error: Failed to extract file path.\n");
+        return FALSE;
+    }
+
+    char *fileId = ExtractFileIdFromFile(extractedPath);
+
+    if (!fileId) {
+        printf("Error: Failed to extract file ID.\n");
+        free(extractedPath);
+        return FALSE;
+    }
+
+    if (!OpenHttpConnection(&hSession, &hConnect)) {
+        printf("Error: Failed to open HTTP connection.\n");
+        free(extractedPath);
+        return FALSE;
+    }
+
+    char endpoint[256];
+    snprintf(endpoint, sizeof(endpoint), "/acl/%s/%s", fileId, username);
+    printf("Requesting DELETE endpoint: %s\n", endpoint);
+
+    hRequest = HttpOpenRequestA(hConnect, "DELETE", endpoint, NULL, NULL, NULL,
+                                INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 0);
+    if (!hRequest) {
+        printf("Error: HttpOpenRequestA failed with %d\n", GetLastError());
+        CloseAllHandlers(&hRequest, &hConnect, &hSession);
+        free(extractedPath);
+        return FALSE;
+    }
+
+    char headers[512];
+    snprintf(headers, sizeof(headers),
+             "Host: %s:%d\r\nAccept: /\r\n",
+             DV_SERVER_IP, DV_SERVER_PORT);
+
+    if (!HttpSendRequestA(hRequest, headers, (DWORD)strlen(headers), NULL, 0)) {
+        printf("Error: HttpSendRequestA failed with %d\n", GetLastError());
+        InternetCloseHandle(hRequest);
+        CloseAllHandlers(&hRequest, &hConnect, &hSession);
+        free(extractedPath);
+        return FALSE;
+    }
+
+    DWORD statusCode = 0;
+    DWORD statusCodeSize = sizeof(statusCode);
+    if (!HttpQueryInfoA(hRequest, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER,
+                        &statusCode, &statusCodeSize, NULL)) {
+        printf("Error: HttpQueryInfoA failed with %d\n", GetLastError());
+        InternetCloseHandle(hRequest);
+        CloseAllHandlers(&hRequest, &hConnect, &hSession);
+        free(extractedPath);
+        return FALSE;
+    }
+
+    printf("Server responded with status code: %lu\n", statusCode);
+
+    InternetCloseHandle(hRequest);
+    CloseAllHandlers(&hRequest, &hConnect, &hSession);
+    free(extractedPath);
+
+    return (statusCode == 200 || statusCode == 204); 
 }
