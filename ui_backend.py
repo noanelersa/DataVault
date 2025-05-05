@@ -18,7 +18,7 @@ def send_to_agent(data: bytes):
     try:
         print(data)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.connect(("192.168.132.131", 2512))
+            sock.connect(("localhost", 2512))
             sock.send(data)
             resp = sock.recv(1024)
             print(resp)

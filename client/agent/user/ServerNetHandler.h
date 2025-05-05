@@ -27,7 +27,7 @@ Environment:
 #define DV_AGENT_NAME "DataVaultAgent"
 
 // TODO: Should be replaced with dynamic server ip (as CLI parameter)
-#define DV_SERVER_IP "192.168.71.1"
+#define DV_SERVER_IP "10.10.248.113"
 
 #define DV_SERVER_PORT 8080
 
