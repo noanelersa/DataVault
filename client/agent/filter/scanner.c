@@ -111,11 +111,21 @@ ScannerPortDisconnect (
     );
 
 NTSTATUS
+ScannerPerformActionInUserMode(
+    _In_ PFLT_INSTANCE Instance,
+    _In_ PFILE_OBJECT FileObject,
+    _Out_ PBOOLEAN SafeToOpen,
+    enum EFileAction action,
+    const char* fullFileName
+    );
+
+NTSTATUS
 ScannerpScanFileInUserMode (
     _In_ PFLT_INSTANCE Instance,
     _In_ PFILE_OBJECT FileObject,
     _Out_ PBOOLEAN SafeToOpen,
-    enum EFileAction action
+    enum EFileAction action,
+    const char* fullFileName
     );
 
 BOOLEAN
@@ -1182,6 +1192,19 @@ Return Value:
         return FLT_POSTOP_FINISHED_PROCESSING;
     }
 
+    char fullFileName[SCANNER_FILE_NAME_SIZE] = { 0 };
+
+    // Too long full filename path - takes only part of it.
+    // TODO: Adjust the size if needed - this won't really work in userspace(we need the full path to write to the file).
+    if (nameInfo->Name.Length > sizeof(fullFileName) - 1)
+    {
+        RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, sizeof(fullFileName) - 1);
+    }
+    else
+    {
+        RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, nameInfo->Name.Length);
+    }
+
     FltParseFileNameInformation( nameInfo );
 
     //
@@ -1207,7 +1230,7 @@ Return Value:
 
     (VOID) ScannerpScanFileInUserMode( FltObjects->Instance,
                                        FltObjects->FileObject,
-                                       &safeToOpen, READ);
+                                       &safeToOpen, CREATE, fullFileName);
 
     if (!safeToOpen) {
 
@@ -1305,17 +1328,41 @@ Return Value:
 --*/
 {
     NTSTATUS status;
-    PSCANNER_STREAM_HANDLE_CONTEXT context;
+    // PSCANNER_STREAM_HANDLE_CONTEXT context;
     BOOLEAN safe;
 
-    UNREFERENCED_PARAMETER( Data );
-    UNREFERENCED_PARAMETER( CompletionContext );
+    UNREFERENCED_PARAMETER(CompletionContext);
 
-    status = FltGetStreamHandleContext( FltObjects->Instance,
+    PFLT_FILE_NAME_INFORMATION nameInfo;
+    status = FltGetFileNameInformation(Data, FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_DEFAULT, &nameInfo);
+    if (!NT_SUCCESS(status))
+    {
+        return FLT_PREOP_SUCCESS_NO_CALLBACK;
+    }
+
+    char fullFileName[SCANNER_FILE_NAME_SIZE] = { 0 };
+    
+    // Too long full filename path - takes only part of it.
+    // TODO: Adjust the size if needed - this won't really work in userspace(we need the full path to write to the file).
+    if (nameInfo->Name.Length > sizeof(fullFileName) - 1)
+    {
+        RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, sizeof(fullFileName) - 1);
+    }
+    else
+    {
+        RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, nameInfo->Name.Length);
+    }
+    
+
+    /*status = FltGetStreamHandleContext( FltObjects->Instance,
                                         FltObjects->FileObject,
-                                        &context );
+                                        &context );*/
 
-    if (NT_SUCCESS( status )) {
+    (void)ScannerPerformActionInUserMode(FltObjects->Instance,
+        FltObjects->FileObject,
+        &safe, CLEANUP, fullFileName);
+
+    /*if (NT_SUCCESS( status )) {
 
         if (context->RescanRequired) {
 
@@ -1330,7 +1377,7 @@ Return Value:
         }
 
         FltReleaseContext( context );
-    }
+    }*/
 
 
     return FLT_PREOP_SUCCESS_NO_CALLBACK;
@@ -1381,6 +1428,19 @@ ScannerPreRead(
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
+    char fullFileName[SCANNER_FILE_NAME_SIZE] = { 0 };
+
+    // Too long full filename path - takes only part of it.
+    // TODO: Adjust the size if needed - this won't really work in userspace(we need the full path to write to the file).
+    if (nameInfo->Name.Length > sizeof(fullFileName) - 1)
+    {
+        RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, sizeof(fullFileName) - 1);
+    }
+    else
+    {
+        RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, nameInfo->Name.Length);
+    }
+
     FltParseFileNameInformation(nameInfo);
 
     //
@@ -1404,11 +1464,11 @@ ScannerPreRead(
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
-    (VOID)ScannerpScanFileInUserMode(
+    (VOID)ScannerPerformActionInUserMode(
         FltObjects->Instance,
         FltObjects->FileObject,
         &safeToOpen,
-        READ);
+        READ, fullFileName);
 
     if (!safeToOpen)
     {
@@ -1470,6 +1530,19 @@ ScannerPreWrite(
 
     FltParseFileNameInformation(nameInfo);
 
+    char fullFileName[SCANNER_FILE_NAME_SIZE] = { 0 };
+
+    // Too long full filename path - takes only part of it.
+    // TODO: Adjust the size if needed - this won't really work in userspace(we need the full path to write to the file).
+    if (nameInfo->Name.Length > sizeof(fullFileName) - 1)
+    {
+        RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, sizeof(fullFileName) - 1);
+    }
+    else
+    {
+        RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, nameInfo->Name.Length);
+    }
+
     //
     //  Check if the extension matches the list of extensions we are interested in
     //
@@ -1492,11 +1565,11 @@ ScannerPreWrite(
     }
 
     // Optionally scan the write buffer here instead of file contents
-    (VOID)ScannerpScanFileInUserMode(
+    (VOID)ScannerPerformActionInUserMode(
         FltObjects->Instance,
         FltObjects->FileObject,
         &safeToOpen,
-        WRITE);
+        WRITE, fullFileName);
 
     if (!safeToOpen)
     {
@@ -1637,11 +1710,154 @@ Return Value:
 /////////////////////////////////////////////////////////////////////////
 
 NTSTATUS
+ScannerPerformActionInUserMode(
+    _In_ PFLT_INSTANCE Instance,
+    _In_ PFILE_OBJECT FileObject,
+    _Out_ PBOOLEAN SafeToOpen,
+    enum EFileAction action,
+    const char  *fullFileName
+)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    ULONG bytesRead = 0;
+    ULONG bytesReadSave = 0;
+    PSCANNER_NOTIFICATION notification = NULL;
+    FLT_VOLUME_PROPERTIES volumeProps;
+    LARGE_INTEGER offset;
+    ULONG replyLength, length;
+    PVOID actionBuffer = NULL;
+    PFLT_VOLUME volume = NULL;
+
+    *SafeToOpen = TRUE;
+
+    //
+    //  If not client port just return.
+    //
+
+    if (ScannerData.ClientPort == NULL) {
+
+        return STATUS_SUCCESS;
+    }
+
+    try {
+
+        //
+        //  Obtain the volume object .
+        //
+
+        status = FltGetVolumeFromInstance(Instance, &volume);
+
+        if (!NT_SUCCESS(status)) {
+
+            leave;
+        }
+
+        //
+        //  Determine sector size. Noncached I/O can only be done at sector size offsets, and in lengths which are
+        //  multiples of sector size. A more efficient way is to make this call once and remember the sector size in the
+        //  instance setup routine and setup an instance context where we can cache it.
+        //
+
+        status = FltGetVolumeProperties(volume,
+            &volumeProps,
+            sizeof(volumeProps),
+            &length);
+        //
+        //  STATUS_BUFFER_OVERFLOW can be returned - however we only need the properties, not the names
+        //  hence we only check for error status.
+        //
+
+        if (NT_ERROR(status)) {
+
+            leave;
+        }
+
+        length = max(SCANNER_READ_BUFFER_SIZE, volumeProps.SectorSize);
+
+        actionBuffer = FltAllocatePoolAlignedWithTag(Instance,
+            NonPagedPool,
+            SCANNER_ACTION_SIZE,
+            'nacS');
+
+        if (NULL == actionBuffer) {
+
+            status = STATUS_INSUFFICIENT_RESOURCES;
+            leave;
+        }
+
+        notification = ExAllocatePoolZero(NonPagedPool,
+            sizeof(SCANNER_NOTIFICATION),
+            'nacS');
+
+        if (NULL == notification) {
+
+            status = STATUS_INSUFFICIENT_RESOURCES;
+            leave;
+        }
+
+        CHAR actionChar = (CHAR)action;
+        actionBuffer = &actionChar;
+        bytesReadSave += SCANNER_ACTION_SIZE;
+
+        notification->BytesToScan = (ULONG)bytesReadSave;
+
+        RtlCopyMemory(&notification->Action,
+            actionBuffer,
+            SCANNER_ACTION_SIZE);
+
+        RtlCopyMemory(&notification->FileName,
+            fullFileName,
+            SCANNER_FILE_NAME_SIZE);
+
+        replyLength = sizeof(SCANNER_REPLY);
+
+        status = FltSendMessage(ScannerData.Filter,
+            &ScannerData.ClientPort,
+            notification,
+            sizeof(SCANNER_NOTIFICATION),
+            notification,
+            &replyLength,
+            NULL);
+
+        if (STATUS_SUCCESS == status) {
+
+            *SafeToOpen = ((PSCANNER_REPLY)notification)->SafeToOpen;
+        }
+        else {
+
+            //
+            //  Couldn't send message
+            //
+
+            DbgPrint("!!! scanner.sys --- couldn't send message to user-mode to scan file, status 0x%X\n", status);
+        }
+    }
+    finally {
+
+        if (NULL != actionBuffer) {
+
+            FltFreePoolAlignedWithTag(Instance, actionBuffer, 'nacS');
+        }
+
+        if (NULL != notification) {
+
+            ExFreePoolWithTag(notification, 'nacS');
+        }
+
+        if (NULL != volume) {
+
+            FltObjectDereference(volume);
+        }
+    }
+}
+
+NTSTATUS
 ScannerpScanFileInUserMode (
     _In_ PFLT_INSTANCE Instance,
     _In_ PFILE_OBJECT FileObject,
     _Out_ PBOOLEAN SafeToOpen,
-	enum EFileAction action
+	enum EFileAction action,
+    const char* fullFileName
     )
 /*++
 
@@ -1678,6 +1894,7 @@ Return Value:
     PVOID magicBuffer = NULL;
     PVOID fileIdBuffer = NULL;
     PVOID actionBuffer = NULL;
+	PVOID fileNameBuffer = NULL;
     ULONG bytesRead = 0;
     ULONG bytesReadSave = 0;
     PSCANNER_NOTIFICATION notification = NULL;
@@ -1822,13 +2039,14 @@ Return Value:
 
 		bytesReadSave += bytesRead;
 
-        ULONG bytesReadSave = SCANNER_MAGIC_SIZE + SCANNER_FILE_ID_SIZE + SCANNER_ACTION_SIZE;
-
         if (NT_SUCCESS( status ) && (SCANNER_MAGIC_SIZE + SCANNER_FILE_ID_SIZE != bytesReadSave)) {
 
             CHAR actionChar = (CHAR)action;
             actionBuffer = &actionChar;
 			bytesReadSave += SCANNER_ACTION_SIZE;
+            
+            RtlCopyMemory(notification->FileName, fullFileName, SCANNER_FILE_NAME_SIZE);
+            bytesReadSave += SCANNER_FILE_NAME_SIZE;
 
             notification->BytesToScan = (ULONG)bytesReadSave;
 

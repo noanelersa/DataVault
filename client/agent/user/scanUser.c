@@ -30,6 +30,7 @@ Environment:
 #include "scanuser.h"
 #include <dontuse.h>
 
+#include "DriverHandler.h"
 #include "ServerNetHandler.h"
 #include "UINetHandler.h"
 #include "Utils.h"
@@ -92,6 +93,7 @@ BOOL ScanBufferWithServer(const char* username, const char* fileID, const char a
     char jsonData[512] = { 0 };
 
     // Format JSON payload.
+	// TODO: Make action dynamic again.
     snprintf(jsonData, sizeof(jsonData),
         "{ \"user\": \"%s\", \"action\": \"0\", \"fileID\": \"%.36s\" }",
         username, fileID);
@@ -147,56 +149,6 @@ BOOL ScanBufferWithServer(const char* username, const char* fileID, const char a
     // If true, allow access to file.
     return (statusCode == ALLOW_ACCESS_CODE);
 }
-
-BOOL
-ScanBuffer (
-    _In_reads_bytes_(BufferSize) PUCHAR Buffer,
-    _In_ ULONG BufferSize
-    )
-/*++
-
-Routine Description
-
-    Scans the supplied buffer for an instance of FoulString.
-
-    Note: Pattern matching algorithm used here is just for illustration purposes,
-    there are many better algorithms available for real world filters
-
-Arguments
-
-    Buffer      -   Pointer to buffer
-    BufferSize  -   Size of passed in buffer
-
-Return Value
-
-    TRUE        -    Found an occurrence of the appropriate FoulString
-    FALSE       -    Buffer is ok
-
---*/
-{
-    PUCHAR p;
-    ULONG searchStringLength = sizeof(FoulString) - sizeof(UCHAR);
-
-    for (p = Buffer;
-         p <= (Buffer + BufferSize - searchStringLength);
-         p++) {
-
-        if (RtlEqualMemory( p, FoulString, searchStringLength )) {
-
-            printf( "Found a string\n" );
-
-            //
-            //  Once we find our search string, we're not interested in seeing
-            //  whether it appears again.
-            //
-
-            return TRUE;
-        }
-    }
-
-    return FALSE;
-}
-
 
 DWORD
 ScannerWorker(
@@ -265,13 +217,63 @@ Return Value
 
         notification = &message->Notification;
 
-        assert(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
-        _Analysis_assume_(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
+        // assert(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
+        // _Analysis_assume_(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
 
-		result = ScanBufferWithServer(Context->username, &notification->FileId, &notification->Action);
         printf("Magic is : %.4s\n", notification->Magic);
         printf("FileId is : %.36s\n", notification->FileId);
         printf("Action is : %c\n", notification->Action[0]);
+
+        if (notification->Action[0] == CREATE)
+        {
+            result = ScanBufferWithServer(Context->username, &notification->FileId, &notification->Action);
+
+            if (result)
+            {
+                printf("File %s is safe to open\n", notification->FileName);
+
+                MapEntryValue entry;
+                entry.fileID = strdup(notification->FileId);
+                entry.allowedAction = notification->Action[0];
+
+                MapSet(notification->FileName, &entry);
+                RemoveMetadataFromFile(notification->FileName);
+            }
+            else
+            {
+                printf("File %s is not safe to open\n", notification->FileName);
+            }
+        }
+        else if (notification->Action[0] == CLEANUP)
+        {
+            char magicFileIDCombined[AGENT_MAGIC_SIZE + AGENT_FILE_ID_SIZE] = { 0 };
+
+            // Combine the magic number and file ID.
+            strncpy(magicFileIDCombined, AGENT_MAGIC, AGENT_MAGIC_SIZE);
+            strncpy(magicFileIDCombined + AGENT_MAGIC_SIZE, MapGet(notification->FileName)->fileID, AGENT_FILE_ID_SIZE);
+
+            // Prepend the magic number and file ID to the file.
+            PrependToFile(notification->FileName, magicFileIDCombined, sizeof(magicFileIDCombined));
+            result = TRUE;
+        }
+        // TODO: change these both to be dynamic by asking the server for each action
+        // and remove the allowed action from the map.
+        else if (notification->Action[0] == READ)
+        {
+            const EFileAction allowedAction = MapGet(notification->FileName)->allowedAction;
+            result = (allowedAction == READ || allowedAction == WRITE);
+        }
+        else if (notification->Action[0] == WRITE)
+        {
+            const EFileAction allowedAction = MapGet(notification->FileName)->allowedAction;
+            result = (allowedAction == WRITE);
+        }
+        else
+        {
+            // Shouldn't happen - non suported action.
+            result = FALSE;
+        }
+
         replyMessage.ReplyHeader.Status = 0;
         replyMessage.ReplyHeader.MessageId = message->MessageHeader.MessageId;
 
@@ -523,6 +525,8 @@ main_cleanup:
     CloseHandle( completion );
 
     free(messages);
+
+	MapCleanup();
 
     return hr;
 }

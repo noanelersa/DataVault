@@ -33,6 +33,83 @@ void Fnv1aHashString(const char* input, char* output)
     snprintf(output, FNV_HASH_STR_LEN, "%08x", hash);
 }
 
+#include <stdio.h>
+#include <stdlib.h>
+
+void RemoveMetadataFromFile(const char* filePath)
+{
+    if (!filePath) {
+        fprintf(stderr, "Error: filePath is NULL.\n");
+        perror("RemoveFirst40Bytes");
+    }
+
+    FILE* fp = fopen(filePath, "rb");
+    if (!fp) {
+        perror("fopen (read)");
+    }
+
+    // Seek to end to get file size
+    if (fseek(fp, 0, SEEK_END) != 0) {
+        perror("fseek");
+        fclose(fp);
+    }
+
+    long fileSize = ftell(fp);
+    if (fileSize < 0) {
+        perror("ftell");
+        fclose(fp);
+    }
+
+    if (fileSize < AGENT_METADATA_SIZE) {
+        fprintf(stderr, "Error: File is smaller than 40 bytes.\n");
+        perror("RemoveFirst40Bytes");
+        fclose(fp);
+    }
+
+    rewind(fp);
+
+    // Allocate buffer for remaining data
+    char* buffer = (char*)malloc(fileSize - AGENT_METADATA_SIZE);
+    if (!buffer) {
+        perror("malloc");
+        fclose(fp);
+    }
+
+    if (fseek(fp, AGENT_METADATA_SIZE, SEEK_SET) != 0) {
+        perror("fseek (skip 40)");
+        free(buffer);
+        fclose(fp);
+    }
+
+    size_t bytesRead = fread(buffer, 1, fileSize - AGENT_METADATA_SIZE, fp);
+    if (bytesRead != (size_t)(fileSize - AGENT_METADATA_SIZE)) {
+        perror("fread");
+        free(buffer);
+        fclose(fp);
+    }
+    fclose(fp);
+
+    // Open file for writing and overwrite
+    fp = fopen(filePath, "wb");
+    if (!fp) {
+        perror("fopen (write)");
+        free(buffer);
+    }
+
+    size_t bytesWritten = fwrite(buffer, 1, fileSize - AGENT_METADATA_SIZE, fp);
+    if (bytesWritten != (size_t)(fileSize - AGENT_METADATA_SIZE)) {
+        perror("fwrite");
+        free(buffer);
+        fclose(fp);
+    }
+
+    free(buffer);
+    fclose(fp);
+
+    return 0;
+}
+
+
 void PrependToFile(const char* file_path, const char* text, const unsigned int textLength)
 {
     FILE* originalFile = fopen(file_path, "rb");
