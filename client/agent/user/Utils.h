@@ -36,6 +36,13 @@ Environment:
 
 #define MAX_JSON_SIZE 1024
 
+#define AGENT_FILE_ID_SIZE 36
+
+#define AGENT_MAGIC   "DTVL"
+#define AGENT_MAGIC_SIZE 4
+
+#define AGENT_METADATA_SIZE (AGENT_MAGIC_SIZE + AGENT_FILE_ID_SIZE)
+
 typedef struct
 {
     char username[256];
@@ -58,6 +65,10 @@ BOOLEAN
 GetSystemUser(
     CHAR* username,
     const DWORD usernamsSize);
+
+void
+RemoveMetadataFromFile(
+    const char* filePath);
 
 void 
 PrependToFile(

@@ -30,6 +30,7 @@ Environment:
 #include "scanuser.h"
 #include <dontuse.h>
 
+#include "DriverHandler.h"
 #include "ServerNetHandler.h"
 #include "UINetHandler.h"
 #include "Utils.h"
@@ -93,8 +94,8 @@ BOOL ScanBufferWithServer(const char* username, const char* fileID, const char a
 
     // Format JSON payload.
     snprintf(jsonData, sizeof(jsonData),
-        "{ \"user\": \"%s\", \"action\": \"0\", \"fileID\": \"%.36s\" }",
-        username, fileID);
+        "{ \"user\": \"%s\", \"action\": \"%c\", \"fileID\": \"%.36s\" }",
+        username, action, fileID);
 
     // Open HTTP connection
     if (!OpenHttpConnection(&hSession, &hConnect))
@@ -147,56 +148,6 @@ BOOL ScanBufferWithServer(const char* username, const char* fileID, const char a
     // If true, allow access to file.
     return (statusCode == ALLOW_ACCESS_CODE);
 }
-
-BOOL
-ScanBuffer (
-    _In_reads_bytes_(BufferSize) PUCHAR Buffer,
-    _In_ ULONG BufferSize
-    )
-/*++
-
-Routine Description
-
-    Scans the supplied buffer for an instance of FoulString.
-
-    Note: Pattern matching algorithm used here is just for illustration purposes,
-    there are many better algorithms available for real world filters
-
-Arguments
-
-    Buffer      -   Pointer to buffer
-    BufferSize  -   Size of passed in buffer
-
-Return Value
-
-    TRUE        -    Found an occurrence of the appropriate FoulString
-    FALSE       -    Buffer is ok
-
---*/
-{
-    PUCHAR p;
-    ULONG searchStringLength = sizeof(FoulString) - sizeof(UCHAR);
-
-    for (p = Buffer;
-         p <= (Buffer + BufferSize - searchStringLength);
-         p++) {
-
-        if (RtlEqualMemory( p, FoulString, searchStringLength )) {
-
-            printf( "Found a string\n" );
-
-            //
-            //  Once we find our search string, we're not interested in seeing
-            //  whether it appears again.
-            //
-
-            return TRUE;
-        }
-    }
-
-    return FALSE;
-}
-
 
 DWORD
 ScannerWorker(
@@ -265,13 +216,69 @@ Return Value
 
         notification = &message->Notification;
 
-        assert(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
-        _Analysis_assume_(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
+        // assert(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
+        // _Analysis_assume_(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
 
-		result = ScanBufferWithServer(Context->username, &notification->FileId, &notification->Action);
         printf("Magic is : %.4s\n", notification->Magic);
         printf("FileId is : %.36s\n", notification->FileId);
         printf("Action is : %c\n", notification->Action[0]);
+
+        const char* filename = notification->FileName;
+        const char actionRequested = notification->Action[0];
+
+        if (actionRequested == CREATE)
+        {
+            result = ScanBufferWithServer(Context->username, &notification->FileId, READ);
+
+            if (result)
+            {
+                printf("File %s is safe to open\n", filename);
+
+                MapEntryValue entry;
+                entry.fileID = strdup(notification->FileId);
+                entry.allowedAction = notification->Action[0];
+
+                MapSet(filename, &entry);
+                RemoveMetadataFromFile(filename);
+            }
+            else
+            {
+                printf("File %s is not registered/safe to open\n", filename);
+            }
+        }
+        else if (actionRequested == CLEANUP)
+        {
+            char magicFileIDCombined[AGENT_MAGIC_SIZE + AGENT_FILE_ID_SIZE] = { 0 };
+
+            // Combine the magic number and file ID.
+            strncpy(magicFileIDCombined, AGENT_MAGIC, AGENT_MAGIC_SIZE);
+
+            const MapEntryValue* value = MapGet(filename)->fileID;
+			if (value == NULL)
+			{
+				// Not a registred file.
+				result = TRUE;
+			}
+            else
+            {
+                strncpy(magicFileIDCombined + AGENT_MAGIC_SIZE, , AGENT_FILE_ID_SIZE);
+
+                // Prepend the magic number and file ID to the file.
+                PrependToFile(filename, magicFileIDCombined, sizeof(magicFileIDCombined));
+                result = TRUE;
+            }
+        }
+        // and remove the allowed action from the map.
+        else if (actionRequested == READ || actionRequested == WRITE)
+        {
+            result = ScanBufferWithServer(Context->username, MapGet(filename)->fileID, actionRequested);;
+        }
+        else
+        {
+            // Shouldn't happen - non suported action.
+            result = FALSE;
+        }
+
         replyMessage.ReplyHeader.Status = 0;
         replyMessage.ReplyHeader.MessageId = message->MessageHeader.MessageId;
 
@@ -523,6 +530,8 @@ main_cleanup:
     CloseHandle( completion );
 
     free(messages);
+
+	MapCleanup();
 
     return hr;
 }
