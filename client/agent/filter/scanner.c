@@ -124,6 +124,7 @@ ScannerpScanFileInUserMode (
     _In_ PFLT_INSTANCE Instance,
     _In_ PFILE_OBJECT FileObject,
     _Out_ PBOOLEAN SafeToOpen,
+    _Out_ PBOOLEAN IsRegistered,
     enum EFileAction action,
     const char* fullFileName
     );
@@ -1124,6 +1125,68 @@ Return Value
     return FALSE;
 }
 
+NTSTATUS
+GetDosFullPathFromNameInfo(
+    _In_ PFLT_INSTANCE Instance,
+    _In_ PFILE_OBJECT FileObject,
+    _In_ PFLT_FILE_NAME_INFORMATION NameInfo,
+    _Out_ PUNICODE_STRING DosPath
+)
+{
+    NTSTATUS status;
+    PFLT_VOLUME volume = NULL;
+    PDEVICE_OBJECT deviceObject = NULL;
+    UNICODE_STRING dosVolumePrefix;
+    USHORT prefixLen, suffixLen;
+
+    DosPath->Buffer = NULL;
+    DosPath->Length = 0;
+    DosPath->MaximumLength = 0;
+
+    // Step 1: Get the volume object
+    status = FltGetVolumeFromFileObject(Instance, FileObject, &volume);
+    if (!NT_SUCCESS(status)) {
+        return status;
+    }
+
+    // Step 2: Get the disk device object
+    status = FltGetDiskDeviceObject(volume, &deviceObject);
+    if (!NT_SUCCESS(status)) {
+        FltObjectDereference(volume);
+        return status;
+    }
+
+    // Step 3: Convert volume device to DOS name (e.g., C:)
+    status = IoVolumeDeviceToDosName(deviceObject, &dosVolumePrefix);
+    ObDereferenceObject(deviceObject); // Always dereference
+    if (!NT_SUCCESS(status)) {
+        FltObjectDereference(volume);
+        return status;
+    }
+
+    // Step 4: Remove \Device\HarddiskVolumeX part from NT path
+    prefixLen = NameInfo->Volume.Length;
+    suffixLen = NameInfo->Name.Length - prefixLen;
+
+    // Step 5: Allocate and build full DOS path
+    DosPath->MaximumLength = dosVolumePrefix.Length + suffixLen + sizeof(WCHAR); // + null terminator
+    DosPath->Buffer = ExAllocatePoolWithTag(PagedPool, DosPath->MaximumLength, 'fdos');
+    if (DosPath->Buffer == NULL) {
+        RtlFreeUnicodeString(&dosVolumePrefix);
+        FltObjectDereference(volume);
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    DosPath->Length = 0;
+    RtlCopyUnicodeString(DosPath, &dosVolumePrefix);
+    RtlAppendUnicodeToString(DosPath, NameInfo->Name.Buffer + (prefixLen / sizeof(WCHAR)));
+
+    // Step 6: Cleanup
+    RtlFreeUnicodeString(&dosVolumePrefix);
+    FltObjectDereference(volume);
+
+    return STATUS_SUCCESS;
+}
 
 FLT_POSTOP_CALLBACK_STATUS
 ScannerPostCreate (
@@ -1163,7 +1226,7 @@ Return Value:
     FLT_POSTOP_CALLBACK_STATUS returnStatus = FLT_POSTOP_FINISHED_PROCESSING;
     PFLT_FILE_NAME_INFORMATION nameInfo;
     NTSTATUS status;
-    BOOLEAN safeToOpen, scanFile;
+    BOOLEAN safeToOpen, scanFile, isRegistered;
 
     UNREFERENCED_PARAMETER( CompletionContext );
     UNREFERENCED_PARAMETER( Flags );
@@ -1192,6 +1255,12 @@ Return Value:
         return FLT_POSTOP_FINISHED_PROCESSING;
     }
 
+    FltParseFileNameInformation(nameInfo);
+
+    UNICODE_STRING DosFullPath;
+
+	//GetDosFullPathFromNameInfo(FltObjects->Instance, FltObjects->FileObject, nameInfo, &DosFullPath);
+
     char fullFileName[SCANNER_FILE_NAME_SIZE] = { 0 };
 
     // Too long full filename path - takes only part of it.
@@ -1204,8 +1273,6 @@ Return Value:
     {
         RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, nameInfo->Name.Length);
     }
-
-    FltParseFileNameInformation( nameInfo );
 
     //
     //  Check if the extension matches the list of extensions we are interested in
@@ -1230,7 +1297,7 @@ Return Value:
 
     (VOID) ScannerpScanFileInUserMode( FltObjects->Instance,
                                        FltObjects->FileObject,
-                                       &safeToOpen, CREATE, fullFileName);
+                                       &safeToOpen, &isRegistered, CREATE, fullFileName);
 
     if (!safeToOpen) {
 
@@ -1248,51 +1315,46 @@ Return Value:
         Data->IoStatus.Information = 0;
 
         returnStatus = FLT_POSTOP_FINISHED_PROCESSING;
-
-    } else if (FltObjects->FileObject->WriteAccess) {
-
-        //
-        //
-        //  The create has requested write access, mark to rescan the file.
-        //  Allocate the context.
-        //
-
-        status = FltAllocateContext( ScannerData.Filter,
-                                     FLT_STREAMHANDLE_CONTEXT,
-                                     sizeof(SCANNER_STREAM_HANDLE_CONTEXT),
-                                     PagedPool,
-                                     &scannerContext );
-
-        if (NT_SUCCESS(status)) {
-
-            //
-            //  Set the handle context.
-            //
-
-            scannerContext->RescanRequired = TRUE;
-
-            (VOID) FltSetStreamHandleContext( FltObjects->Instance,
-                                              FltObjects->FileObject,
-                                              FLT_SET_CONTEXT_REPLACE_IF_EXISTS,
-                                              scannerContext,
-                                              NULL );
-
-            //
-            //  Normally we would check the results of FltSetStreamHandleContext
-            //  for a variety of error cases. However, The only error status
-            //  that could be returned, in this case, would tell us that
-            //  contexts are not supported.  Even if we got this error,
-            //  we just want to release the context now and that will free
-            //  this memory if it was not successfully set.
-            //
-
-            //
-            //  Release our reference on the context (the set adds a reference)
-            //
-
-            FltReleaseContext( scannerContext );
-        }
     }
+
+    //status = FltAllocateContext(ScannerData.Filter,
+    //    FLT_STREAMHANDLE_CONTEXT,
+    //    sizeof(SCANNER_STREAM_HANDLE_CONTEXT),
+    //    PagedPool,
+    //    &scannerContext);
+
+    //if (NT_SUCCESS(status)) {
+    //    if (safeToOpen && isRegistered) {
+    //        KeBugCheckEx(0xDEADDEAD, 0x1, 0x2, 0x3, 0x4); // TODO: remove this line
+    //        scannerContext->RescanRequired = TRUE;
+    //        CHAR fileIdBuffer[] = "hello";
+    //        ULONG bytesWritten = 0;
+    //        LARGE_INTEGER offset = { 0 }; // write at beginning of file
+
+    //        //status = FltWriteFile(
+    //        //    FltObjects->Instance,
+    //        //    FltObjects->FileObject,
+    //        //    &offset,
+    //        //    sizeof(fileIdBuffer) - 1, // exclude null terminator
+    //        //    fileIdBuffer,
+    //        //    FLTFL_IO_OPERATION_NON_CACHED |
+    //        //    FLTFL_IO_OPERATION_DO_NOT_UPDATE_BYTE_OFFSET,
+    //        //    &bytesWritten,
+    //        //    NULL,
+    //        //    NULL
+    //        //);
+    //    }
+    //    else {
+    //        scannerContext->RescanRequired = FALSE;
+    //    }
+    //    (VOID)FltSetStreamHandleContext(FltObjects->Instance,
+    //        FltObjects->FileObject,
+    //        FLT_SET_CONTEXT_REPLACE_IF_EXISTS,
+    //        scannerContext,
+    //        NULL);
+
+    //    FltReleaseContext(scannerContext);
+    //}
 
     return returnStatus;
 }
@@ -1328,56 +1390,46 @@ Return Value:
 --*/
 {
     NTSTATUS status;
-    // PSCANNER_STREAM_HANDLE_CONTEXT context;
+    PSCANNER_STREAM_HANDLE_CONTEXT context;
     BOOLEAN safe;
 
     UNREFERENCED_PARAMETER(CompletionContext);
 
-    PFLT_FILE_NAME_INFORMATION nameInfo;
-    status = FltGetFileNameInformation(Data, FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_DEFAULT, &nameInfo);
-    if (!NT_SUCCESS(status))
-    {
-        return FLT_PREOP_SUCCESS_NO_CALLBACK;
-    }
+    //status = FltGetStreamHandleContext(FltObjects->Instance,
+    //    FltObjects->FileObject,
+    //    &context);
 
-    char fullFileName[SCANNER_FILE_NAME_SIZE] = { 0 };
-    
-    // Too long full filename path - takes only part of it.
-    // TODO: Adjust the size if needed - this won't really work in userspace(we need the full path to write to the file).
-    if (nameInfo->Name.Length > sizeof(fullFileName) - 1)
-    {
-        RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, sizeof(fullFileName) - 1);
-    }
-    else
-    {
-        RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, nameInfo->Name.Length);
-    }
-    
+    //if (NT_SUCCESS( status )) {
 
-    /*status = FltGetStreamHandleContext( FltObjects->Instance,
-                                        FltObjects->FileObject,
-                                        &context );*/
+    //    if (context->RescanRequired) {
 
-    (void)ScannerPerformActionInUserMode(FltObjects->Instance,
-        FltObjects->FileObject,
-        &safe, CLEANUP, fullFileName);
+    //        PFLT_FILE_NAME_INFORMATION nameInfo;
+    //        status = FltGetFileNameInformation(Data, FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_DEFAULT, &nameInfo);
+    //        if (!NT_SUCCESS(status))
+    //        {
+    //            return FLT_PREOP_SUCCESS_NO_CALLBACK;
+    //        }
 
-    /*if (NT_SUCCESS( status )) {
+    //        char fullFileName[SCANNER_FILE_NAME_SIZE] = { 0 };
 
-        if (context->RescanRequired) {
+    //        // Too long full filename path - takes only part of it.
+    //        // TODO: Adjust the size if needed - this won't really work in userspace(we need the full path to write to the file).
+    //        if (nameInfo->Name.Length > sizeof(fullFileName) - 1)
+    //        {
+    //            RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, sizeof(fullFileName) - 1);
+    //        }
+    //        else
+    //        {
+    //            RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, nameInfo->Name.Length);
+    //        }
 
-            (VOID) ScannerpScanFileInUserMode( FltObjects->Instance,
-                                               FltObjects->FileObject,
-                                               &safe, WRITE);
+    //        /*(void)ScannerPerformActionInUserMode(FltObjects->Instance,
+    //            FltObjects->FileObject,
+    //            &safe, CLEANUP, fullFileName);*/
+    //    }
 
-            if (!safe) {
-
-                DbgPrint( "!!! scanner.sys -- foul language detected in precleanup !!!\n" );
-            }
-        }
-
-        FltReleaseContext( context );
-    }*/
+    //    FltReleaseContext( context );
+    //}
 
 
     return FLT_PREOP_SUCCESS_NO_CALLBACK;
@@ -1464,11 +1516,13 @@ ScannerPreRead(
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
-    (VOID)ScannerPerformActionInUserMode(
+    /*(VOID)ScannerPerformActionInUserMode(
         FltObjects->Instance,
         FltObjects->FileObject,
         &safeToOpen,
-        READ, fullFileName);
+        READ, fullFileName);*/
+
+    safeToOpen = TRUE;
 
     if (!safeToOpen)
     {
@@ -1564,12 +1618,13 @@ ScannerPreWrite(
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
-    // Optionally scan the write buffer here instead of file contents
-    (VOID)ScannerPerformActionInUserMode(
+    /*(VOID)ScannerPerformActionInUserMode(
         FltObjects->Instance,
         FltObjects->FileObject,
         &safeToOpen,
-        WRITE, fullFileName);
+        WRITE, fullFileName);*/
+
+	safeToOpen = TRUE;
 
     if (!safeToOpen)
     {
@@ -1856,6 +1911,7 @@ ScannerpScanFileInUserMode (
     _In_ PFLT_INSTANCE Instance,
     _In_ PFILE_OBJECT FileObject,
     _Out_ PBOOLEAN SafeToOpen,
+    _Out_ PBOOLEAN IsRegistered,
 	enum EFileAction action,
     const char* fullFileName
     )
@@ -1904,6 +1960,7 @@ Return Value:
     PFLT_VOLUME volume = NULL;
 
     *SafeToOpen = TRUE;
+    *IsRegistered = FALSE;
 
     //
     //  If not client port just return.
@@ -1913,6 +1970,8 @@ Return Value:
 
         return STATUS_SUCCESS;
     }
+
+    //if (strncmp(fullFileName,"secret.txt", 11))
 
     try {
 
@@ -2004,9 +2063,10 @@ Return Value:
 
 		// Check if the magic number is present
         if (NT_SUCCESS(status) && bytesRead == SCANNER_MAGIC_SIZE) {
-			if (!RtlCompareMemory(SCANNER_MAGIC, magicBuffer, SCANNER_MAGIC_SIZE)) {
+			if (RtlCompareMemory(SCANNER_MAGIC, magicBuffer, SCANNER_MAGIC_SIZE) != SCANNER_MAGIC_SIZE) {
 				DbgPrint("!!! scanner.sys --- no magic number detected, ignored\n");
 				*SafeToOpen = TRUE;
+                *IsRegistered = FALSE;
 				leave;
 			}
 		}
@@ -2014,6 +2074,7 @@ Return Value:
 		else {
 			DbgPrint("!!! scanner.sys --- magic number not detected, ignored\n");
 			*SafeToOpen = TRUE;
+            *IsRegistered = FALSE;
 			leave;
 		}
 
@@ -2034,18 +2095,19 @@ Return Value:
 		if (bytesRead != SCANNER_FILE_ID_SIZE) {
 			DbgPrint("!!! scanner.sys --- file id not detected, ignored\n");
 			*SafeToOpen = TRUE;
+            *IsRegistered = FALSE;
 			leave;
 		}
 
 		bytesReadSave += bytesRead;
 
-        if (NT_SUCCESS( status ) && (SCANNER_MAGIC_SIZE + SCANNER_FILE_ID_SIZE != bytesReadSave)) {
+        if (NT_SUCCESS( status ) && (SCANNER_MAGIC_SIZE + SCANNER_FILE_ID_SIZE == bytesReadSave)) {
 
             CHAR actionChar = (CHAR)action;
             actionBuffer = &actionChar;
 			bytesReadSave += SCANNER_ACTION_SIZE;
             
-            RtlCopyMemory(notification->FileName, fullFileName, SCANNER_FILE_NAME_SIZE);
+            RtlCopyMemory(&notification->FileName, fullFileName, SCANNER_FILE_NAME_SIZE);
             bytesReadSave += SCANNER_FILE_NAME_SIZE;
 
             notification->BytesToScan = (ULONG)bytesReadSave;
@@ -2072,10 +2134,18 @@ Return Value:
                                      &replyLength,
                                      NULL );
 
+            
+
             if (STATUS_SUCCESS == status) {
 
                 *SafeToOpen = ((PSCANNER_REPLY) notification)->SafeToOpen;
-
+                
+				if (*SafeToOpen == FALSE) {
+                    *IsRegistered = FALSE;
+				}
+				else {
+					*IsRegistered = TRUE;
+				}
             } else {
 
                 //
