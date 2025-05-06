@@ -111,11 +111,22 @@ ScannerPortDisconnect (
     );
 
 NTSTATUS
+ScannerPerformActionInUserMode(
+    _In_ PFLT_INSTANCE Instance,
+    _In_ PFILE_OBJECT FileObject,
+    _Out_ PBOOLEAN SafeToOpen,
+    enum EFileAction action,
+    const char* fullFileName
+    );
+
+NTSTATUS
 ScannerpScanFileInUserMode (
     _In_ PFLT_INSTANCE Instance,
     _In_ PFILE_OBJECT FileObject,
     _Out_ PBOOLEAN SafeToOpen,
-    enum EFileAction action
+    _Out_ PBOOLEAN IsRegistered,
+    enum EFileAction action,
+    const char* fullFileName
     );
 
 BOOLEAN
@@ -1114,6 +1125,68 @@ Return Value
     return FALSE;
 }
 
+NTSTATUS
+GetDosFullPathFromNameInfo(
+    _In_ PFLT_INSTANCE Instance,
+    _In_ PFILE_OBJECT FileObject,
+    _In_ PFLT_FILE_NAME_INFORMATION NameInfo,
+    _Out_ PUNICODE_STRING DosPath
+)
+{
+    NTSTATUS status;
+    PFLT_VOLUME volume = NULL;
+    PDEVICE_OBJECT deviceObject = NULL;
+    UNICODE_STRING dosVolumePrefix;
+    USHORT prefixLen, suffixLen;
+
+    DosPath->Buffer = NULL;
+    DosPath->Length = 0;
+    DosPath->MaximumLength = 0;
+
+    // Step 1: Get the volume object
+    status = FltGetVolumeFromFileObject(Instance, FileObject, &volume);
+    if (!NT_SUCCESS(status)) {
+        return status;
+    }
+
+    // Step 2: Get the disk device object
+    status = FltGetDiskDeviceObject(volume, &deviceObject);
+    if (!NT_SUCCESS(status)) {
+        FltObjectDereference(volume);
+        return status;
+    }
+
+    // Step 3: Convert volume device to DOS name (e.g., C:)
+    status = IoVolumeDeviceToDosName(deviceObject, &dosVolumePrefix);
+    ObDereferenceObject(deviceObject); // Always dereference
+    if (!NT_SUCCESS(status)) {
+        FltObjectDereference(volume);
+        return status;
+    }
+
+    // Step 4: Remove \Device\HarddiskVolumeX part from NT path
+    prefixLen = NameInfo->Volume.Length;
+    suffixLen = NameInfo->Name.Length - prefixLen;
+
+    // Step 5: Allocate and build full DOS path
+    DosPath->MaximumLength = dosVolumePrefix.Length + suffixLen + sizeof(WCHAR); // + null terminator
+    DosPath->Buffer = ExAllocatePoolWithTag(PagedPool, DosPath->MaximumLength, 'fdos');
+    if (DosPath->Buffer == NULL) {
+        RtlFreeUnicodeString(&dosVolumePrefix);
+        FltObjectDereference(volume);
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    DosPath->Length = 0;
+    RtlCopyUnicodeString(DosPath, &dosVolumePrefix);
+    RtlAppendUnicodeToString(DosPath, NameInfo->Name.Buffer + (prefixLen / sizeof(WCHAR)));
+
+    // Step 6: Cleanup
+    RtlFreeUnicodeString(&dosVolumePrefix);
+    FltObjectDereference(volume);
+
+    return STATUS_SUCCESS;
+}
 
 FLT_POSTOP_CALLBACK_STATUS
 ScannerPostCreate (
@@ -1153,7 +1226,7 @@ Return Value:
     FLT_POSTOP_CALLBACK_STATUS returnStatus = FLT_POSTOP_FINISHED_PROCESSING;
     PFLT_FILE_NAME_INFORMATION nameInfo;
     NTSTATUS status;
-    BOOLEAN safeToOpen, scanFile;
+    BOOLEAN safeToOpen, scanFile, isRegistered;
 
     UNREFERENCED_PARAMETER( CompletionContext );
     UNREFERENCED_PARAMETER( Flags );
@@ -1182,7 +1255,24 @@ Return Value:
         return FLT_POSTOP_FINISHED_PROCESSING;
     }
 
-    FltParseFileNameInformation( nameInfo );
+    FltParseFileNameInformation(nameInfo);
+
+    UNICODE_STRING DosFullPath;
+
+	//GetDosFullPathFromNameInfo(FltObjects->Instance, FltObjects->FileObject, nameInfo, &DosFullPath);
+
+    char fullFileName[SCANNER_FILE_NAME_SIZE] = { 0 };
+
+    // Too long full filename path - takes only part of it.
+    // TODO: Adjust the size if needed - this won't really work in userspace(we need the full path to write to the file).
+    if (nameInfo->Name.Length > sizeof(fullFileName) - 1)
+    {
+        RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, sizeof(fullFileName) - 1);
+    }
+    else
+    {
+        RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, nameInfo->Name.Length);
+    }
 
     //
     //  Check if the extension matches the list of extensions we are interested in
@@ -1207,7 +1297,7 @@ Return Value:
 
     (VOID) ScannerpScanFileInUserMode( FltObjects->Instance,
                                        FltObjects->FileObject,
-                                       &safeToOpen, READ);
+                                       &safeToOpen, &isRegistered, CREATE, fullFileName);
 
     if (!safeToOpen) {
 
@@ -1225,51 +1315,46 @@ Return Value:
         Data->IoStatus.Information = 0;
 
         returnStatus = FLT_POSTOP_FINISHED_PROCESSING;
-
-    } else if (FltObjects->FileObject->WriteAccess) {
-
-        //
-        //
-        //  The create has requested write access, mark to rescan the file.
-        //  Allocate the context.
-        //
-
-        status = FltAllocateContext( ScannerData.Filter,
-                                     FLT_STREAMHANDLE_CONTEXT,
-                                     sizeof(SCANNER_STREAM_HANDLE_CONTEXT),
-                                     PagedPool,
-                                     &scannerContext );
-
-        if (NT_SUCCESS(status)) {
-
-            //
-            //  Set the handle context.
-            //
-
-            scannerContext->RescanRequired = TRUE;
-
-            (VOID) FltSetStreamHandleContext( FltObjects->Instance,
-                                              FltObjects->FileObject,
-                                              FLT_SET_CONTEXT_REPLACE_IF_EXISTS,
-                                              scannerContext,
-                                              NULL );
-
-            //
-            //  Normally we would check the results of FltSetStreamHandleContext
-            //  for a variety of error cases. However, The only error status
-            //  that could be returned, in this case, would tell us that
-            //  contexts are not supported.  Even if we got this error,
-            //  we just want to release the context now and that will free
-            //  this memory if it was not successfully set.
-            //
-
-            //
-            //  Release our reference on the context (the set adds a reference)
-            //
-
-            FltReleaseContext( scannerContext );
-        }
     }
+
+    //status = FltAllocateContext(ScannerData.Filter,
+    //    FLT_STREAMHANDLE_CONTEXT,
+    //    sizeof(SCANNER_STREAM_HANDLE_CONTEXT),
+    //    PagedPool,
+    //    &scannerContext);
+
+    //if (NT_SUCCESS(status)) {
+    //    if (safeToOpen && isRegistered) {
+    //        KeBugCheckEx(0xDEADDEAD, 0x1, 0x2, 0x3, 0x4); // TODO: remove this line
+    //        scannerContext->RescanRequired = TRUE;
+    //        CHAR fileIdBuffer[] = "hello";
+    //        ULONG bytesWritten = 0;
+    //        LARGE_INTEGER offset = { 0 }; // write at beginning of file
+
+    //        //status = FltWriteFile(
+    //        //    FltObjects->Instance,
+    //        //    FltObjects->FileObject,
+    //        //    &offset,
+    //        //    sizeof(fileIdBuffer) - 1, // exclude null terminator
+    //        //    fileIdBuffer,
+    //        //    FLTFL_IO_OPERATION_NON_CACHED |
+    //        //    FLTFL_IO_OPERATION_DO_NOT_UPDATE_BYTE_OFFSET,
+    //        //    &bytesWritten,
+    //        //    NULL,
+    //        //    NULL
+    //        //);
+    //    }
+    //    else {
+    //        scannerContext->RescanRequired = FALSE;
+    //    }
+    //    (VOID)FltSetStreamHandleContext(FltObjects->Instance,
+    //        FltObjects->FileObject,
+    //        FLT_SET_CONTEXT_REPLACE_IF_EXISTS,
+    //        scannerContext,
+    //        NULL);
+
+    //    FltReleaseContext(scannerContext);
+    //}
 
     return returnStatus;
 }
@@ -1308,29 +1393,43 @@ Return Value:
     PSCANNER_STREAM_HANDLE_CONTEXT context;
     BOOLEAN safe;
 
-    UNREFERENCED_PARAMETER( Data );
-    UNREFERENCED_PARAMETER( CompletionContext );
+    UNREFERENCED_PARAMETER(CompletionContext);
 
-    status = FltGetStreamHandleContext( FltObjects->Instance,
-                                        FltObjects->FileObject,
-                                        &context );
+    //status = FltGetStreamHandleContext(FltObjects->Instance,
+    //    FltObjects->FileObject,
+    //    &context);
 
-    if (NT_SUCCESS( status )) {
+    //if (NT_SUCCESS( status )) {
 
-        if (context->RescanRequired) {
+    //    if (context->RescanRequired) {
 
-            (VOID) ScannerpScanFileInUserMode( FltObjects->Instance,
-                                               FltObjects->FileObject,
-                                               &safe, WRITE);
+    //        PFLT_FILE_NAME_INFORMATION nameInfo;
+    //        status = FltGetFileNameInformation(Data, FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_DEFAULT, &nameInfo);
+    //        if (!NT_SUCCESS(status))
+    //        {
+    //            return FLT_PREOP_SUCCESS_NO_CALLBACK;
+    //        }
 
-            if (!safe) {
+    //        char fullFileName[SCANNER_FILE_NAME_SIZE] = { 0 };
 
-                DbgPrint( "!!! scanner.sys -- foul language detected in precleanup !!!\n" );
-            }
-        }
+    //        // Too long full filename path - takes only part of it.
+    //        // TODO: Adjust the size if needed - this won't really work in userspace(we need the full path to write to the file).
+    //        if (nameInfo->Name.Length > sizeof(fullFileName) - 1)
+    //        {
+    //            RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, sizeof(fullFileName) - 1);
+    //        }
+    //        else
+    //        {
+    //            RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, nameInfo->Name.Length);
+    //        }
 
-        FltReleaseContext( context );
-    }
+    //        /*(void)ScannerPerformActionInUserMode(FltObjects->Instance,
+    //            FltObjects->FileObject,
+    //            &safe, CLEANUP, fullFileName);*/
+    //    }
+
+    //    FltReleaseContext( context );
+    //}
 
 
     return FLT_PREOP_SUCCESS_NO_CALLBACK;
@@ -1381,6 +1480,19 @@ ScannerPreRead(
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
+    char fullFileName[SCANNER_FILE_NAME_SIZE] = { 0 };
+
+    // Too long full filename path - takes only part of it.
+    // TODO: Adjust the size if needed - this won't really work in userspace(we need the full path to write to the file).
+    if (nameInfo->Name.Length > sizeof(fullFileName) - 1)
+    {
+        RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, sizeof(fullFileName) - 1);
+    }
+    else
+    {
+        RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, nameInfo->Name.Length);
+    }
+
     FltParseFileNameInformation(nameInfo);
 
     //
@@ -1404,11 +1516,13 @@ ScannerPreRead(
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
-    (VOID)ScannerpScanFileInUserMode(
+    /*(VOID)ScannerPerformActionInUserMode(
         FltObjects->Instance,
         FltObjects->FileObject,
         &safeToOpen,
-        READ);
+        READ, fullFileName);*/
+
+    safeToOpen = TRUE;
 
     if (!safeToOpen)
     {
@@ -1470,6 +1584,19 @@ ScannerPreWrite(
 
     FltParseFileNameInformation(nameInfo);
 
+    char fullFileName[SCANNER_FILE_NAME_SIZE] = { 0 };
+
+    // Too long full filename path - takes only part of it.
+    // TODO: Adjust the size if needed - this won't really work in userspace(we need the full path to write to the file).
+    if (nameInfo->Name.Length > sizeof(fullFileName) - 1)
+    {
+        RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, sizeof(fullFileName) - 1);
+    }
+    else
+    {
+        RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, nameInfo->Name.Length);
+    }
+
     //
     //  Check if the extension matches the list of extensions we are interested in
     //
@@ -1491,12 +1618,13 @@ ScannerPreWrite(
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
-    // Optionally scan the write buffer here instead of file contents
-    (VOID)ScannerpScanFileInUserMode(
+    /*(VOID)ScannerPerformActionInUserMode(
         FltObjects->Instance,
         FltObjects->FileObject,
         &safeToOpen,
-        WRITE);
+        WRITE, fullFileName);*/
+
+	safeToOpen = TRUE;
 
     if (!safeToOpen)
     {
@@ -1637,11 +1765,155 @@ Return Value:
 /////////////////////////////////////////////////////////////////////////
 
 NTSTATUS
+ScannerPerformActionInUserMode(
+    _In_ PFLT_INSTANCE Instance,
+    _In_ PFILE_OBJECT FileObject,
+    _Out_ PBOOLEAN SafeToOpen,
+    enum EFileAction action,
+    const char  *fullFileName
+)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    ULONG bytesRead = 0;
+    ULONG bytesReadSave = 0;
+    PSCANNER_NOTIFICATION notification = NULL;
+    FLT_VOLUME_PROPERTIES volumeProps;
+    LARGE_INTEGER offset;
+    ULONG replyLength, length;
+    PVOID actionBuffer = NULL;
+    PFLT_VOLUME volume = NULL;
+
+    *SafeToOpen = TRUE;
+
+    //
+    //  If not client port just return.
+    //
+
+    if (ScannerData.ClientPort == NULL) {
+
+        return STATUS_SUCCESS;
+    }
+
+    try {
+
+        //
+        //  Obtain the volume object .
+        //
+
+        status = FltGetVolumeFromInstance(Instance, &volume);
+
+        if (!NT_SUCCESS(status)) {
+
+            leave;
+        }
+
+        //
+        //  Determine sector size. Noncached I/O can only be done at sector size offsets, and in lengths which are
+        //  multiples of sector size. A more efficient way is to make this call once and remember the sector size in the
+        //  instance setup routine and setup an instance context where we can cache it.
+        //
+
+        status = FltGetVolumeProperties(volume,
+            &volumeProps,
+            sizeof(volumeProps),
+            &length);
+        //
+        //  STATUS_BUFFER_OVERFLOW can be returned - however we only need the properties, not the names
+        //  hence we only check for error status.
+        //
+
+        if (NT_ERROR(status)) {
+
+            leave;
+        }
+
+        length = max(SCANNER_READ_BUFFER_SIZE, volumeProps.SectorSize);
+
+        actionBuffer = FltAllocatePoolAlignedWithTag(Instance,
+            NonPagedPool,
+            SCANNER_ACTION_SIZE,
+            'nacS');
+
+        if (NULL == actionBuffer) {
+
+            status = STATUS_INSUFFICIENT_RESOURCES;
+            leave;
+        }
+
+        notification = ExAllocatePoolZero(NonPagedPool,
+            sizeof(SCANNER_NOTIFICATION),
+            'nacS');
+
+        if (NULL == notification) {
+
+            status = STATUS_INSUFFICIENT_RESOURCES;
+            leave;
+        }
+
+        CHAR actionChar = (CHAR)action;
+        actionBuffer = &actionChar;
+        bytesReadSave += SCANNER_ACTION_SIZE;
+
+        notification->BytesToScan = (ULONG)bytesReadSave;
+
+        RtlCopyMemory(&notification->Action,
+            actionBuffer,
+            SCANNER_ACTION_SIZE);
+
+        RtlCopyMemory(&notification->FileName,
+            fullFileName,
+            SCANNER_FILE_NAME_SIZE);
+
+        replyLength = sizeof(SCANNER_REPLY);
+
+        status = FltSendMessage(ScannerData.Filter,
+            &ScannerData.ClientPort,
+            notification,
+            sizeof(SCANNER_NOTIFICATION),
+            notification,
+            &replyLength,
+            NULL);
+
+        if (STATUS_SUCCESS == status) {
+
+            *SafeToOpen = ((PSCANNER_REPLY)notification)->SafeToOpen;
+        }
+        else {
+
+            //
+            //  Couldn't send message
+            //
+
+            DbgPrint("!!! scanner.sys --- couldn't send message to user-mode to scan file, status 0x%X\n", status);
+        }
+    }
+    finally {
+
+        if (NULL != actionBuffer) {
+
+            FltFreePoolAlignedWithTag(Instance, actionBuffer, 'nacS');
+        }
+
+        if (NULL != notification) {
+
+            ExFreePoolWithTag(notification, 'nacS');
+        }
+
+        if (NULL != volume) {
+
+            FltObjectDereference(volume);
+        }
+    }
+}
+
+NTSTATUS
 ScannerpScanFileInUserMode (
     _In_ PFLT_INSTANCE Instance,
     _In_ PFILE_OBJECT FileObject,
     _Out_ PBOOLEAN SafeToOpen,
-	enum EFileAction action
+    _Out_ PBOOLEAN IsRegistered,
+	enum EFileAction action,
+    const char* fullFileName
     )
 /*++
 
@@ -1677,8 +1949,10 @@ Return Value:
     NTSTATUS status = STATUS_SUCCESS;
     PVOID magicBuffer = NULL;
     PVOID fileIdBuffer = NULL;
-    ULONG bytesRead;
-    ULONG bytesReadSave;
+    PVOID actionBuffer = NULL;
+	PVOID fileNameBuffer = NULL;
+    ULONG bytesRead = 0;
+    ULONG bytesReadSave = 0;
     PSCANNER_NOTIFICATION notification = NULL;
     FLT_VOLUME_PROPERTIES volumeProps;
     LARGE_INTEGER offset;
@@ -1686,6 +1960,7 @@ Return Value:
     PFLT_VOLUME volume = NULL;
 
     *SafeToOpen = TRUE;
+    *IsRegistered = FALSE;
 
     //
     //  If not client port just return.
@@ -1695,6 +1970,8 @@ Return Value:
 
         return STATUS_SUCCESS;
     }
+
+    //if (strncmp(fullFileName,"secret.txt", 11))
 
     try {
 
@@ -1745,8 +2022,12 @@ Return Value:
 			SCANNER_FILE_ID_SIZE,
 			'nacS');
 
+        actionBuffer = FltAllocatePoolAlignedWithTag(Instance,
+            NonPagedPool,
+            SCANNER_ACTION_SIZE,
+            'nacS');
 
-        if (NULL == magicBuffer || NULL == fileIdBuffer) {
+        if (NULL == magicBuffer || NULL == fileIdBuffer || NULL == actionBuffer) {
 
             status = STATUS_INSUFFICIENT_RESOURCES;
             leave;
@@ -1782,9 +2063,10 @@ Return Value:
 
 		// Check if the magic number is present
         if (NT_SUCCESS(status) && bytesRead == SCANNER_MAGIC_SIZE) {
-			if (!RtlCompareMemory(SCANNER_MAGIC, magicBuffer, SCANNER_MAGIC_SIZE)) {
+			if (RtlCompareMemory(SCANNER_MAGIC, magicBuffer, SCANNER_MAGIC_SIZE) != SCANNER_MAGIC_SIZE) {
 				DbgPrint("!!! scanner.sys --- no magic number detected, ignored\n");
 				*SafeToOpen = TRUE;
+                *IsRegistered = FALSE;
 				leave;
 			}
 		}
@@ -1792,6 +2074,7 @@ Return Value:
 		else {
 			DbgPrint("!!! scanner.sys --- magic number not detected, ignored\n");
 			*SafeToOpen = TRUE;
+            *IsRegistered = FALSE;
 			leave;
 		}
 
@@ -1812,15 +2095,20 @@ Return Value:
 		if (bytesRead != SCANNER_FILE_ID_SIZE) {
 			DbgPrint("!!! scanner.sys --- file id not detected, ignored\n");
 			*SafeToOpen = TRUE;
+            *IsRegistered = FALSE;
 			leave;
 		}
 
 		bytesReadSave += bytesRead;
 
-		notification->Action = (CHAR)action;
-		bytesReadSave += sizeof(CHAR);
+        if (NT_SUCCESS( status ) && (SCANNER_MAGIC_SIZE + SCANNER_FILE_ID_SIZE == bytesReadSave)) {
 
-        if (NT_SUCCESS( status ) && (0 != bytesReadSave)) {
+            CHAR actionChar = (CHAR)action;
+            actionBuffer = &actionChar;
+			bytesReadSave += SCANNER_ACTION_SIZE;
+            
+            RtlCopyMemory(&notification->FileName, fullFileName, SCANNER_FILE_NAME_SIZE);
+            bytesReadSave += SCANNER_FILE_NAME_SIZE;
 
             notification->BytesToScan = (ULONG)bytesReadSave;
 
@@ -1832,6 +2120,10 @@ Return Value:
 				fileIdBuffer,
 				SCANNER_FILE_ID_SIZE);
 
+            RtlCopyMemory(&notification->Action,
+                actionBuffer,
+                SCANNER_ACTION_SIZE);
+
             replyLength = sizeof( SCANNER_REPLY );
 
             status = FltSendMessage( ScannerData.Filter,
@@ -1842,10 +2134,18 @@ Return Value:
                                      &replyLength,
                                      NULL );
 
+            
+
             if (STATUS_SUCCESS == status) {
 
                 *SafeToOpen = ((PSCANNER_REPLY) notification)->SafeToOpen;
-
+                
+				if (*SafeToOpen == FALSE) {
+                    *IsRegistered = FALSE;
+				}
+				else {
+					*IsRegistered = TRUE;
+				}
             } else {
 
                 //
@@ -1866,6 +2166,11 @@ Return Value:
         if (NULL != fileIdBuffer) {
 
             FltFreePoolAlignedWithTag(Instance, fileIdBuffer, 'nacS');
+        }
+
+        if (NULL != actionBuffer) {
+
+            FltFreePoolAlignedWithTag(Instance, actionBuffer, 'nacS');
         }
 
         if (NULL != notification) {

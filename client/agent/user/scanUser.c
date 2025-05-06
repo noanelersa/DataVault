@@ -30,6 +30,7 @@ Environment:
 #include "scanuser.h"
 #include <dontuse.h>
 
+#include "DriverHandler.h"
 #include "ServerNetHandler.h"
 #include "UINetHandler.h"
 #include "Utils.h"
@@ -93,15 +94,15 @@ BOOL ScanBufferWithServer(const char* username, const char* fileID, const char a
 
     // Format JSON payload.
     snprintf(jsonData, sizeof(jsonData),
-        "{ \"user\": \"%s\", \"action\": \"0\", \"fileID\": \"%.36s\" }",
-        username, fileID);
+        "{ \"user\": \"%s\", \"action\": \"%c\", \"fileID\": \"%.36s\" }",
+        username, action + '0', fileID);
 
     // Open HTTP connection
     if (!OpenHttpConnection(&hSession, &hConnect))
     {
         return FALSE;
     } 
-
+    printf("After OpenHttp\n");
     // Open HTTP request (POST)
     hRequest = HttpOpenRequestA(hConnect, "POST", "/events", NULL, NULL, NULL,
         INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 0);
@@ -111,7 +112,7 @@ BOOL ScanBufferWithServer(const char* username, const char* fileID, const char a
         InternetCloseHandle(hSession);
         return FALSE;
     }
-
+    printf("After OpenRequest\n");
     char headers[512] = { 0 };
     snprintf(headers, sizeof(headers),
         "Host: %s:%d\r\nContent-Type: application/json\r\nAccept: */*\r\n",
@@ -127,7 +128,7 @@ BOOL ScanBufferWithServer(const char* username, const char* fileID, const char a
         CloseAllHandlers(&hRequest, &hConnect, &hSession);
 		return FALSE;
     }
-
+    printf("After SendRequest\n");
 	DWORD statusCode = 0;
 	DWORD statusCodeSize = sizeof(statusCode);
 
@@ -140,7 +141,7 @@ BOOL ScanBufferWithServer(const char* username, const char* fileID, const char a
     {
         printf("HttpQueryInfoA failed with error: %d\n", GetLastError());
     }
-
+    printf("After HttpQueryInfoA\n");
     // Cleanup
 	CloseAllHandlers(&hRequest, &hConnect, &hSession);
 
@@ -148,55 +149,53 @@ BOOL ScanBufferWithServer(const char* username, const char* fileID, const char a
     return (statusCode == ALLOW_ACCESS_CODE);
 }
 
-BOOL
-ScanBuffer (
-    _In_reads_bytes_(BufferSize) PUCHAR Buffer,
-    _In_ ULONG BufferSize
-    )
-/*++
-
-Routine Description
-
-    Scans the supplied buffer for an instance of FoulString.
-
-    Note: Pattern matching algorithm used here is just for illustration purposes,
-    there are many better algorithms available for real world filters
-
-Arguments
-
-    Buffer      -   Pointer to buffer
-    BufferSize  -   Size of passed in buffer
-
-Return Value
-
-    TRUE        -    Found an occurrence of the appropriate FoulString
-    FALSE       -    Buffer is ok
-
---*/
-{
-    PUCHAR p;
-    ULONG searchStringLength = sizeof(FoulString) - sizeof(UCHAR);
-
-    for (p = Buffer;
-         p <= (Buffer + BufferSize - searchStringLength);
-         p++) {
-
-        if (RtlEqualMemory( p, FoulString, searchStringLength )) {
-
-            printf( "Found a string\n" );
-
-            //
-            //  Once we find our search string, we're not interested in seeing
-            //  whether it appears again.
-            //
-
-            return TRUE;
-        }
+char* utf16_to_utf8(const wchar_t* utf16_str) {
+    int utf8_len = WideCharToMultiByte(CP_UTF8, 0, utf16_str, -1, NULL, 0, NULL, NULL);
+    if (utf8_len == 0) {
+        return NULL; // conversion failed
     }
 
-    return FALSE;
+    char* utf8_str = (char*)malloc(utf8_len);
+    if (!utf8_str) {
+        return NULL; // memory allocation failed
+    }
+
+    if (WideCharToMultiByte(CP_UTF8, 0, utf16_str, -1, utf8_str, utf8_len, NULL, NULL) == 0) {
+        free(utf8_str);
+        return NULL; // conversion failed
+    }
+
+    return utf8_str; // caller must free
 }
 
+int ConvertNtPathToDosPath(const char* nt_path, char* out_dos_path, size_t out_size) {
+    char drives[512];
+    DWORD len = GetLogicalDriveStringsA(sizeof(drives), drives);
+    if (len == 0 || len > sizeof(drives)) {
+        return -1; // failed to get drives
+    }
+
+    char* drive = drives;
+    while (*drive) {
+        char device_path[MAX_PATH];
+        if (QueryDosDeviceA(drive, device_path, MAX_PATH)) {
+            size_t device_len = strlen(device_path);
+            if (_strnicmp(nt_path, device_path, device_len) == 0) {
+                // Match found — convert
+                snprintf(out_dos_path, out_size, "%s%s", drive, nt_path + device_len);
+                // Remove trailing backslash if present in drive
+                size_t len = strlen(out_dos_path);
+                if (out_dos_path[len - 1] == '\\' && nt_path[device_len] == '\\') {
+                    memmove(out_dos_path + strlen(drive) - 1, out_dos_path + strlen(drive), len - strlen(drive) + 1);
+                }
+                return 1;
+            }
+        }
+        drive += strlen(drive) + 1;
+    }
+
+    return 0; // no match found
+}
 
 DWORD
 ScannerWorker(
@@ -265,23 +264,118 @@ Return Value
 
         notification = &message->Notification;
 
-        assert(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
-        _Analysis_assume_(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
+        // assert(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
+        // _Analysis_assume_(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
 
-		result = ScanBufferWithServer(Context->username, &notification->FileId, &notification->Action);
         printf("Magic is : %.4s\n", notification->Magic);
         printf("FileId is : %.36s\n", notification->FileId);
-        printf("Action is : %X\n", notification->Action);
+        printf("Action is : %d\n", notification->Action[0]);
+
+        /*char* nt_path = utf16_to_utf8(notification->FileName);
+        char filename[MAX_PATH] = { 0 };
+        printf("%s\n", nt_path);
+        int ret = ConvertNtPathToDosPath(nt_path, filename, sizeof(filename));
+        if (ret == 1) {
+			printf("Converted NT path to DOS path: %s\n", filename);
+		}
+		else if (ret == 0) {
+			printf("No match found for NT path in DOS drives.\n");
+		}
+		else
+        {
+            printf("Failed to convert NT path to DOS path.\n");
+        }*/
+        
+        const char *nt_path = utf16_to_utf8(notification->FileName);
+        char filename[MAX_PATH] = "C:";
+		strcpy(filename + 2, nt_path + 23); // Copy the NT path after "C:"
+        const char actionRequested = notification->Action[0];
+
+        printf("Filename is : %s\n", filename);
+        printf("ActionRequested is : %d\n", actionRequested);
+
+        if (actionRequested == CREATE)
+        {
+            printf("In Create Action\n");
+            Sleep(3000); // Simulate some processing time.
+            result = ScanBufferWithServer(Context->username, &notification->FileId, READ);
+
+            if (result)
+            {
+                printf("File %s is safe to open\n", filename);
+
+                MapEntryValue entry;
+                entry.fileID = strdup(notification->FileId);
+                entry.allowedAction = notification->Action[0];
+
+                MapSet(filename, &entry);
+                //RemoveMetadataFromFile(filename);
+                printf("Done removing metadata\n");
+                Sleep(3000);
+            }
+            else
+            {
+                printf("File %s is not registered/safe to open\n", filename);
+            }
+        }
+        else if (actionRequested == CLEANUP)
+        {
+            char magicFileIDCombined[AGENT_MAGIC_SIZE + AGENT_FILE_ID_SIZE] = { 0 };
+
+            // Combine the magic number and file ID.
+            strncpy(magicFileIDCombined, AGENT_MAGIC, AGENT_MAGIC_SIZE);
+
+            const MapEntryValue* value = MapGet(filename);
+			if (value == NULL)
+			{
+				// Not a registred file.
+				result = TRUE;
+			}
+            else
+            {
+                strncpy(magicFileIDCombined + AGENT_MAGIC_SIZE, value->fileID, AGENT_FILE_ID_SIZE);
+
+                // Prepend the magic number and file ID to the file.
+                PrependToFile(filename, magicFileIDCombined, sizeof(magicFileIDCombined));
+                result = TRUE;
+            }
+        }
+        // and remove the allowed action from the map.
+        else if (actionRequested == READ || actionRequested == WRITE)
+        {
+            printf("In Read/Write Action\n");
+            const MapEntryValue* value = MapGet(filename);
+            printf("After MapGet\n");
+            if (value == NULL)
+            {
+                // Not a registred file.
+                result = TRUE;
+            }
+            else
+            {
+                result = ScanBufferWithServer(Context->username, value->fileID, actionRequested);
+            }
+            
+        }
+        else
+        {
+            // Shouldn't happen - non suported action.
+            result = FALSE;
+        }
+
         replyMessage.ReplyHeader.Status = 0;
         replyMessage.ReplyHeader.MessageId = message->MessageHeader.MessageId;
 
         replyMessage.Reply.SafeToOpen = result;
 
         printf( "Replying message, SafeToOpen: %d\n", replyMessage.Reply.SafeToOpen );
-
+        
         hr = FilterReplyMessage( Context->Port,
                                  (PFILTER_REPLY_HEADER) &replyMessage,
                                  sizeof( replyMessage ) );
+
+        printf("FUCKME\n");
+        Sleep(3000);
 
         if (SUCCEEDED( hr )) {
 
@@ -523,6 +617,8 @@ main_cleanup:
     CloseHandle( completion );
 
     free(messages);
+
+	MapCleanup();
 
     return hr;
 }
