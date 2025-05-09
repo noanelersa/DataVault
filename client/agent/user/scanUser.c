@@ -269,7 +269,7 @@ Return Value
 
         printf("Magic is : %.4s\n", notification->Magic);
         printf("FileId is : %.36s\n", notification->FileId);
-        printf("Action is : %d\n", notification->Action[0]);
+        printf("Action is : %d\n", notification->Action);
 
         /*char* nt_path = utf16_to_utf8(notification->FileName);
         char filename[MAX_PATH] = { 0 };
@@ -289,7 +289,7 @@ Return Value
         const char *nt_path = utf16_to_utf8(notification->FileName);
         char filename[MAX_PATH] = "C:";
 		strcpy(filename + 2, nt_path + 23); // Copy the NT path after "C:"
-        const char actionRequested = notification->Action[0];
+        const char actionRequested = notification->Action;
 
         printf("Filename is : %s\n", filename);
         printf("ActionRequested is : %d\n", actionRequested);
@@ -297,7 +297,7 @@ Return Value
         if (actionRequested == CREATE)
         {
             printf("In Create Action\n");
-            Sleep(3000); // Simulate some processing time.
+             // Simulate some processing time.
             result = ScanBufferWithServer(Context->username, &notification->FileId, READ);
 
             if (result)
@@ -306,12 +306,12 @@ Return Value
 
                 MapEntryValue entry;
                 entry.fileID = strdup(notification->FileId);
-                entry.allowedAction = notification->Action[0];
-
+                entry.allowedAction = notification->Action;
+                 
                 MapSet(filename, &entry);
-                //RemoveMetadataFromFile(filename);
+                RemoveMetadataFromFile(filename);
                 printf("Done removing metadata\n");
-                Sleep(3000);
+                
             }
             else
             {
@@ -375,7 +375,7 @@ Return Value
                                  sizeof( replyMessage ) );
 
         printf("FUCKME\n");
-        Sleep(3000);
+        
 
         if (SUCCEEDED( hr )) {
 

@@ -1317,44 +1317,43 @@ Return Value:
         returnStatus = FLT_POSTOP_FINISHED_PROCESSING;
     }
 
-    //status = FltAllocateContext(ScannerData.Filter,
-    //    FLT_STREAMHANDLE_CONTEXT,
-    //    sizeof(SCANNER_STREAM_HANDLE_CONTEXT),
-    //    PagedPool,
-    //    &scannerContext);
+    status = FltAllocateContext(ScannerData.Filter,
+        FLT_STREAMHANDLE_CONTEXT,
+        sizeof(SCANNER_STREAM_HANDLE_CONTEXT),
+        PagedPool,
+        &scannerContext);
 
-    //if (NT_SUCCESS(status)) {
-    //    if (safeToOpen && isRegistered) {
-    //        KeBugCheckEx(0xDEADDEAD, 0x1, 0x2, 0x3, 0x4); // TODO: remove this line
-    //        scannerContext->RescanRequired = TRUE;
-    //        CHAR fileIdBuffer[] = "hello";
-    //        ULONG bytesWritten = 0;
-    //        LARGE_INTEGER offset = { 0 }; // write at beginning of file
+    if (NT_SUCCESS(status)) {
+        if (safeToOpen && isRegistered) {
+            scannerContext->RescanRequired = TRUE;
+            CHAR fileIdBuffer[] = "hello";
+            ULONG bytesWritten = 0;
+            LARGE_INTEGER offset = { 0 }; // write at beginning of file
 
-    //        //status = FltWriteFile(
-    //        //    FltObjects->Instance,
-    //        //    FltObjects->FileObject,
-    //        //    &offset,
-    //        //    sizeof(fileIdBuffer) - 1, // exclude null terminator
-    //        //    fileIdBuffer,
-    //        //    FLTFL_IO_OPERATION_NON_CACHED |
-    //        //    FLTFL_IO_OPERATION_DO_NOT_UPDATE_BYTE_OFFSET,
-    //        //    &bytesWritten,
-    //        //    NULL,
-    //        //    NULL
-    //        //);
-    //    }
-    //    else {
-    //        scannerContext->RescanRequired = FALSE;
-    //    }
-    //    (VOID)FltSetStreamHandleContext(FltObjects->Instance,
-    //        FltObjects->FileObject,
-    //        FLT_SET_CONTEXT_REPLACE_IF_EXISTS,
-    //        scannerContext,
-    //        NULL);
+            status = FltWriteFile(
+                FltObjects->Instance,
+                FltObjects->FileObject,
+                &offset,
+                sizeof(fileIdBuffer) - 1, // exclude null terminator
+                fileIdBuffer,
+                FLTFL_IO_OPERATION_NON_CACHED |
+                FLTFL_IO_OPERATION_DO_NOT_UPDATE_BYTE_OFFSET,
+                &bytesWritten,
+                NULL,
+                NULL
+            );
+        }
+        else {
+            scannerContext->RescanRequired = FALSE;
+        }
+        (VOID)FltSetStreamHandleContext(FltObjects->Instance,
+            FltObjects->FileObject,
+            FLT_SET_CONTEXT_REPLACE_IF_EXISTS,
+            scannerContext,
+            NULL);
 
-    //    FltReleaseContext(scannerContext);
-    //}
+        FltReleaseContext(scannerContext);
+    }
 
     return returnStatus;
 }
@@ -1395,41 +1394,41 @@ Return Value:
 
     UNREFERENCED_PARAMETER(CompletionContext);
 
-    //status = FltGetStreamHandleContext(FltObjects->Instance,
-    //    FltObjects->FileObject,
-    //    &context);
+    status = FltGetStreamHandleContext(FltObjects->Instance,
+        FltObjects->FileObject,
+        &context);
 
-    //if (NT_SUCCESS( status )) {
+    if (NT_SUCCESS( status )) {
 
-    //    if (context->RescanRequired) {
+        if (context->RescanRequired) {
 
-    //        PFLT_FILE_NAME_INFORMATION nameInfo;
-    //        status = FltGetFileNameInformation(Data, FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_DEFAULT, &nameInfo);
-    //        if (!NT_SUCCESS(status))
-    //        {
-    //            return FLT_PREOP_SUCCESS_NO_CALLBACK;
-    //        }
+            PFLT_FILE_NAME_INFORMATION nameInfo;
+            status = FltGetFileNameInformation(Data, FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_DEFAULT, &nameInfo);
+            if (!NT_SUCCESS(status))
+            {
+                return FLT_PREOP_SUCCESS_NO_CALLBACK;
+            }
 
-    //        char fullFileName[SCANNER_FILE_NAME_SIZE] = { 0 };
+            char fullFileName[SCANNER_FILE_NAME_SIZE] = { 0 };
 
-    //        // Too long full filename path - takes only part of it.
-    //        // TODO: Adjust the size if needed - this won't really work in userspace(we need the full path to write to the file).
-    //        if (nameInfo->Name.Length > sizeof(fullFileName) - 1)
-    //        {
-    //            RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, sizeof(fullFileName) - 1);
-    //        }
-    //        else
-    //        {
-    //            RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, nameInfo->Name.Length);
-    //        }
+            // Too long full filename path - takes only part of it.
+            // TODO: Adjust the size if needed - this won't really work in userspace(we need the full path to write to the file).
+            if (nameInfo->Name.Length > sizeof(fullFileName) - 1)
+            {
+                RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, sizeof(fullFileName) - 1);
+            }
+            else
+            {
+                RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, nameInfo->Name.Length);
+            }
 
-    //        /*(void)ScannerPerformActionInUserMode(FltObjects->Instance,
-    //            FltObjects->FileObject,
-    //            &safe, CLEANUP, fullFileName);*/
-    //    }
+            (void)ScannerPerformActionInUserMode(FltObjects->Instance,
+                FltObjects->FileObject,
+                &safe, CLEANUP, fullFileName);
+        }
 
-    //    FltReleaseContext( context );
-    //}
+        FltReleaseContext( context );
+    }
 
 
     return FLT_PREOP_SUCCESS_NO_CALLBACK;
@@ -1780,7 +1779,6 @@ ScannerPerformActionInUserMode(
     FLT_VOLUME_PROPERTIES volumeProps;
     LARGE_INTEGER offset;
     ULONG replyLength, length;
-    PVOID actionBuffer = NULL;
     PFLT_VOLUME volume = NULL;
 
     *SafeToOpen = TRUE;
@@ -1829,17 +1827,6 @@ ScannerPerformActionInUserMode(
 
         length = max(SCANNER_READ_BUFFER_SIZE, volumeProps.SectorSize);
 
-        actionBuffer = FltAllocatePoolAlignedWithTag(Instance,
-            NonPagedPool,
-            SCANNER_ACTION_SIZE,
-            'nacS');
-
-        if (NULL == actionBuffer) {
-
-            status = STATUS_INSUFFICIENT_RESOURCES;
-            leave;
-        }
-
         notification = ExAllocatePoolZero(NonPagedPool,
             sizeof(SCANNER_NOTIFICATION),
             'nacS');
@@ -1850,15 +1837,11 @@ ScannerPerformActionInUserMode(
             leave;
         }
 
-        CHAR actionChar = (CHAR)action;
-        actionBuffer = &actionChar;
         bytesReadSave += SCANNER_ACTION_SIZE;
 
         notification->BytesToScan = (ULONG)bytesReadSave;
 
-        RtlCopyMemory(&notification->Action,
-            actionBuffer,
-            SCANNER_ACTION_SIZE);
+        notification->Action = action;
 
         RtlCopyMemory(&notification->FileName,
             fullFileName,
@@ -1888,11 +1871,6 @@ ScannerPerformActionInUserMode(
         }
     }
     finally {
-
-        if (NULL != actionBuffer) {
-
-            FltFreePoolAlignedWithTag(Instance, actionBuffer, 'nacS');
-        }
 
         if (NULL != notification) {
 
@@ -1949,7 +1927,6 @@ Return Value:
     NTSTATUS status = STATUS_SUCCESS;
     PVOID magicBuffer = NULL;
     PVOID fileIdBuffer = NULL;
-    PVOID actionBuffer = NULL;
 	PVOID fileNameBuffer = NULL;
     ULONG bytesRead = 0;
     ULONG bytesReadSave = 0;
@@ -2022,12 +1999,7 @@ Return Value:
 			SCANNER_FILE_ID_SIZE,
 			'nacS');
 
-        actionBuffer = FltAllocatePoolAlignedWithTag(Instance,
-            NonPagedPool,
-            SCANNER_ACTION_SIZE,
-            'nacS');
-
-        if (NULL == magicBuffer || NULL == fileIdBuffer || NULL == actionBuffer) {
+        if (NULL == magicBuffer || NULL == fileIdBuffer) {
 
             status = STATUS_INSUFFICIENT_RESOURCES;
             leave;
@@ -2104,7 +2076,6 @@ Return Value:
         if (NT_SUCCESS( status ) && (SCANNER_MAGIC_SIZE + SCANNER_FILE_ID_SIZE == bytesReadSave)) {
 
             CHAR actionChar = (CHAR)action;
-            actionBuffer = &actionChar;
 			bytesReadSave += SCANNER_ACTION_SIZE;
             
             RtlCopyMemory(&notification->FileName, fullFileName, SCANNER_FILE_NAME_SIZE);
@@ -2120,9 +2091,7 @@ Return Value:
 				fileIdBuffer,
 				SCANNER_FILE_ID_SIZE);
 
-            RtlCopyMemory(&notification->Action,
-                actionBuffer,
-                SCANNER_ACTION_SIZE);
+            notification->Action = action;
 
             replyLength = sizeof( SCANNER_REPLY );
 
@@ -2166,11 +2135,6 @@ Return Value:
         if (NULL != fileIdBuffer) {
 
             FltFreePoolAlignedWithTag(Instance, fileIdBuffer, 'nacS');
-        }
-
-        if (NULL != actionBuffer) {
-
-            FltFreePoolAlignedWithTag(Instance, actionBuffer, 'nacS');
         }
 
         if (NULL != notification) {
