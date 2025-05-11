@@ -1045,7 +1045,11 @@ Return Value:
     UNREFERENCED_PARAMETER( FltObjects );
     UNREFERENCED_PARAMETER( CompletionContext = NULL );
 
-    PAGED_CODE();
+    NTSTATUS status;
+    FILE_STANDARD_INFORMATION fileInfo;
+    LARGE_INTEGER fileSize;
+    UCHAR footerBuf[METADATA_TAIL_SIZE];
+    ULONG bytesRead;
 
     //
     //  See if this create is being done by our user process.
@@ -1055,6 +1059,9 @@ Return Value:
 
         DbgPrint( "!!! scanner.sys -- allowing create for trusted process \n" );
 
+    fileSize = fileInfo.EndOfFile;
+
+    if (fileSize.QuadPart < METADATA_TAIL_SIZE)
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 

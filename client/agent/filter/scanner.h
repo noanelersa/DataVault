@@ -131,11 +131,32 @@ ScannerPreCleanup (
     );
 
 FLT_PREOP_CALLBACK_STATUS
+ScannerPreRead(
+    PFLT_CALLBACK_DATA Data,
+    PCFLT_RELATED_OBJECTS FltObjects,
+    PVOID* CompletionContext
+);
+
+FLT_PREOP_CALLBACK_STATUS
 ScannerPreWrite (
     _Inout_ PFLT_CALLBACK_DATA Data,
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
     _Flt_CompletionContext_Outptr_ PVOID *CompletionContext
     );
+
+FLT_PREOP_CALLBACK_STATUS
+ScannerPreQueryInfo(
+    PFLT_CALLBACK_DATA Data,
+    PCFLT_RELATED_OBJECTS FltObjects,
+    PVOID* CompletionContext
+);
+
+FLT_PREOP_CALLBACK_STATUS
+ScannerPreSetInfo(
+    PFLT_CALLBACK_DATA Data,
+    PCFLT_RELATED_OBJECTS FltObjects,
+    PVOID* CompletionContext
+);
 
 #if (WINVER >= 0x0602)
 
