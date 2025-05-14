@@ -33,6 +33,7 @@ Environment:
 #define FNV_HASH_STR_LEN 9
 
 #define TEMP_FILE_PATH "temp_file.tmp"
+#define TEMP_FILE_PATH1 "temp_file1.tmp"
 
 #define MAX_JSON_SIZE 1024
 
@@ -66,9 +67,9 @@ GetSystemUser(
     CHAR* username,
     const DWORD usernamsSize);
 
-void
+int 
 RemoveMetadataFromFile(
-    const char* filePath);
+       const char* filePath);
 
 void 
 PrependToFile(

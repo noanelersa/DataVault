@@ -20,6 +20,8 @@ Environment:
 --*/
 
 #include <fltKernel.h>
+extern UCHAR* PsGetProcessImageFileName(PEPROCESS Process);
+
 #include <dontuse.h>
 #include <suppress.h>
 #include "scanuk.h"
@@ -1022,6 +1024,18 @@ Return Value:
     return STATUS_SUCCESS;
 }
 
+BOOLEAN IsTrustedProcess(PETHREAD Thread)
+{
+    PEPROCESS process = IoThreadToProcess(Thread);
+    const char* imageName = PsGetProcessImageFileName(process);
+
+    // imageName is 15 chars max, not null-terminated beyond that.
+    // Notepad.exe is usually lowercase.
+    return (_stricmp(imageName, "notepad.exe") != 0);
+}
+
+
+#define FO_STREAM_FILE         0x0080
 
 FLT_PREOP_CALLBACK_STATUS
 ScannerPreCreate (
@@ -1072,6 +1086,12 @@ Return Value:
 
         DbgPrint( "!!! scanner.sys -- allowing create for trusted process \n" );
 
+        return FLT_PREOP_SUCCESS_NO_CALLBACK;
+    }
+
+    if (IsTrustedProcess(Data->Thread) ||
+        (FltObjects->FileObject->Flags & FO_STREAM_FILE) ||
+        (Data->Iopb->Parameters.Create.Options & FILE_DIRECTORY_FILE)) {
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
@@ -1295,9 +1315,9 @@ Return Value:
         return FLT_POSTOP_FINISHED_PROCESSING;
     }
 
-    (VOID) ScannerpScanFileInUserMode( FltObjects->Instance,
-                                       FltObjects->FileObject,
-                                       &safeToOpen, &isRegistered, CREATE, fullFileName);
+    (VOID)ScannerpScanFileInUserMode(FltObjects->Instance,
+        FltObjects->FileObject,
+        &safeToOpen, &isRegistered, CREATE, fullFileName);
 
     if (!safeToOpen) {
 
@@ -1326,26 +1346,11 @@ Return Value:
     if (NT_SUCCESS(status)) {
         if (safeToOpen && isRegistered) {
             scannerContext->RescanRequired = TRUE;
-            CHAR fileIdBuffer[] = "hello";
-            ULONG bytesWritten = 0;
-            LARGE_INTEGER offset = { 0 }; // write at beginning of file
-
-            status = FltWriteFile(
-                FltObjects->Instance,
-                FltObjects->FileObject,
-                &offset,
-                sizeof(fileIdBuffer) - 1, // exclude null terminator
-                fileIdBuffer,
-                FLTFL_IO_OPERATION_NON_CACHED |
-                FLTFL_IO_OPERATION_DO_NOT_UPDATE_BYTE_OFFSET,
-                &bytesWritten,
-                NULL,
-                NULL
-            );
         }
         else {
             scannerContext->RescanRequired = FALSE;
         }
+
         (VOID)FltSetStreamHandleContext(FltObjects->Instance,
             FltObjects->FileObject,
             FLT_SET_CONTEXT_REPLACE_IF_EXISTS,
@@ -1394,13 +1399,26 @@ Return Value:
 
     UNREFERENCED_PARAMETER(CompletionContext);
 
+    if (IoThreadToProcess(Data->Thread) == ScannerData.UserProcess) {
+
+        DbgPrint("!!! scanner.sys -- allowing clenaup for trusted process \n");
+
+        return FLT_PREOP_SUCCESS_NO_CALLBACK;
+    }
+
+    if (IsTrustedProcess(Data->Thread) ||
+        (FltObjects->FileObject->Flags & FO_STREAM_FILE) ||
+        (Data->Iopb->Parameters.Create.Options & FILE_DIRECTORY_FILE)) {
+        return FLT_PREOP_SUCCESS_NO_CALLBACK;
+    }
+
     status = FltGetStreamHandleContext(FltObjects->Instance,
         FltObjects->FileObject,
         &context);
 
     if (NT_SUCCESS( status )) {
 
-        if (context->RescanRequired) {
+        if (!context->RescanRequired) {
 
             PFLT_FILE_NAME_INFORMATION nameInfo;
             status = FltGetFileNameInformation(Data, FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_DEFAULT, &nameInfo);
@@ -1421,6 +1439,7 @@ Return Value:
             {
                 RtlCopyMemory(fullFileName, nameInfo->Name.Buffer, nameInfo->Name.Length);
             }
+
 
             (void)ScannerPerformActionInUserMode(FltObjects->Instance,
                 FltObjects->FileObject,
@@ -1466,6 +1485,13 @@ ScannerPreRead(
 
     if (!NT_SUCCESS(Data->IoStatus.Status) || (STATUS_REPARSE == Data->IoStatus.Status))
     {
+        return FLT_PREOP_SUCCESS_NO_CALLBACK;
+    }
+
+    if (IoThreadToProcess(Data->Thread) == ScannerData.UserProcess) {
+
+        DbgPrint("!!! scanner.sys -- allowing read for trusted process \n");
+
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
@@ -1572,6 +1598,13 @@ ScannerPreWrite(
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
+    if (IoThreadToProcess(Data->Thread) == ScannerData.UserProcess) {
+
+        DbgPrint("!!! scanner.sys -- allowing write for trusted process \n");
+
+        return FLT_PREOP_SUCCESS_NO_CALLBACK;
+    }
+
     //
     //  Check if we are interested in this file.
     //
@@ -1637,21 +1670,21 @@ ScannerPreWrite(
         return FLT_PREOP_COMPLETE;
     }
 
-    if (FltObjects->FileObject->WriteAccess)
-    {
-        //
-        //  The create has requested write access, mark to rescan the file.
-        //  Allocate the context.
-        //
+    //if (FltObjects->FileObject->WriteAccess)
+    //{
+    //    //
+    //    //  The create has requested write access, mark to rescan the file.
+    //    //  Allocate the context.
+    //    //
 
-        status = FltAllocateContext(ScannerData.Filter, FLT_STREAMHANDLE_CONTEXT, sizeof(SCANNER_STREAM_HANDLE_CONTEXT), PagedPool, &scannerContext);
-        if (NT_SUCCESS(status))
-        {
-            scannerContext->RescanRequired = TRUE;
-            (VOID)FltSetStreamHandleContext(FltObjects->Instance, FltObjects->FileObject, FLT_SET_CONTEXT_REPLACE_IF_EXISTS, scannerContext, NULL);
-            FltReleaseContext(scannerContext);
-        }
-    }
+    //    status = FltAllocateContext(ScannerData.Filter, FLT_STREAMHANDLE_CONTEXT, sizeof(SCANNER_STREAM_HANDLE_CONTEXT), PagedPool, &scannerContext);
+    //    if (NT_SUCCESS(status))
+    //    {
+    //        scannerContext->RescanRequired = TRUE;
+    //        (VOID)FltSetStreamHandleContext(FltObjects->Instance, FltObjects->FileObject, FLT_SET_CONTEXT_REPLACE_IF_EXISTS, scannerContext, NULL);
+    //        FltReleaseContext(scannerContext);
+    //    }
+    //}
 
     return FLT_PREOP_SUCCESS_NO_CALLBACK;
 }

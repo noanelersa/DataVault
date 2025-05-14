@@ -260,16 +260,16 @@ Return Value
             break;
         }
 
-        printf( "Received message, size %Id\n", pOvlp->InternalHigh );
+        /*printf( "Received message, size %Id\n", pOvlp->InternalHigh );*/
 
         notification = &message->Notification;
 
         // assert(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
         // _Analysis_assume_(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
 
-        printf("Magic is : %.4s\n", notification->Magic);
+        /*printf("Magic is : %.4s\n", notification->Magic);
         printf("FileId is : %.36s\n", notification->FileId);
-        printf("Action is : %d\n", notification->Action);
+        printf("Action is : %d\n", notification->Action);*/
 
         /*char* nt_path = utf16_to_utf8(notification->FileName);
         char filename[MAX_PATH] = { 0 };
@@ -285,33 +285,48 @@ Return Value
         {
             printf("Failed to convert NT path to DOS path.\n");
         }*/
-        
+
         const char *nt_path = utf16_to_utf8(notification->FileName);
         char filename[MAX_PATH] = "C:";
 		strcpy(filename + 2, nt_path + 23); // Copy the NT path after "C:"
         const char actionRequested = notification->Action;
 
-        printf("Filename is : %s\n", filename);
-        printf("ActionRequested is : %d\n", actionRequested);
+        /*printf("Filename is : %s\n", filename);
+        printf("ActionRequested is : %d\n", actionRequested);*/
 
         if (actionRequested == CREATE)
         {
             printf("In Create Action\n");
              // Simulate some processing time.
-            result = ScanBufferWithServer(Context->username, &notification->FileId, READ);
-
+           // result = ScanBufferWithServer(Context->username, &notification->FileId, READ);
+            result = TRUE;
             if (result)
             {
-                printf("File %s is safe to open\n", filename);
+                if (RemoveMetadataFromFile(filename) == 0)
+                {
+                    printf("Done removing metadata\n");
+                    MapEntryValue entry;
+                    entry.fileID = strdup(notification->FileId);
+                    entry.allowedAction = notification->Action;
 
-                MapEntryValue entry;
-                entry.fileID = strdup(notification->FileId);
-                entry.allowedAction = notification->Action;
-                 
-                MapSet(filename, &entry);
-                RemoveMetadataFromFile(filename);
-                printf("Done removing metadata\n");
-                
+                    MapSet(filename, &entry);
+                }
+                else
+                    printf("Failed removing metadata\n");
+
+                replyMessage.ReplyHeader.Status = 0;
+                replyMessage.ReplyHeader.MessageId = message->MessageHeader.MessageId;
+
+                replyMessage.Reply.SafeToOpen = result;
+
+
+                //printf("File %s is safe to open\n", filename);
+
+                //printf("Replying message, SafeToOpen: %d\n", replyMessage.Reply.SafeToOpen);
+
+                hr = FilterReplyMessage(Context->Port,
+                    (PFILTER_REPLY_HEADER)&replyMessage,
+                    sizeof(replyMessage));
             }
             else
             {
@@ -320,7 +335,7 @@ Return Value
         }
         else if (actionRequested == CLEANUP)
         {
-            char magicFileIDCombined[AGENT_MAGIC_SIZE + AGENT_FILE_ID_SIZE] = { 0 };
+            char magicFileIDCombined[AGENT_MAGIC_SIZE + AGENT_FILE_ID_SIZE + 1] = { 0 };
 
             // Combine the magic number and file ID.
             strncpy(magicFileIDCombined, AGENT_MAGIC, AGENT_MAGIC_SIZE);
@@ -328,16 +343,41 @@ Return Value
             const MapEntryValue* value = MapGet(filename);
 			if (value == NULL)
 			{
+                // printf("\n\nNo value in cleanup\n\n");
 				// Not a registred file.
 				result = TRUE;
+                replyMessage.ReplyHeader.Status = 0;
+                replyMessage.ReplyHeader.MessageId = message->MessageHeader.MessageId;
+
+                replyMessage.Reply.SafeToOpen = result;
+
+                hr = FilterReplyMessage(Context->Port,
+                    (PFILTER_REPLY_HEADER)&replyMessage,
+                    sizeof(replyMessage));
 			}
             else
             {
                 strncpy(magicFileIDCombined + AGENT_MAGIC_SIZE, value->fileID, AGENT_FILE_ID_SIZE);
 
+                printf("\n\nRegistred file cleanup %s\n\n", magicFileIDCombined);
+
                 // Prepend the magic number and file ID to the file.
-                PrependToFile(filename, magicFileIDCombined, sizeof(magicFileIDCombined));
+                PrependToFile(filename, magicFileIDCombined, sizeof(magicFileIDCombined) - 1);
+                //MapRemove(filename);
+
                 result = TRUE;
+                replyMessage.ReplyHeader.Status = 0;
+                replyMessage.ReplyHeader.MessageId = message->MessageHeader.MessageId;
+
+                replyMessage.Reply.SafeToOpen = result;
+
+                printf("Replying message, SafeToOpen: %d\n", replyMessage.Reply.SafeToOpen);
+
+                printf("Filename is : %s\n", filename);
+
+                hr = FilterReplyMessage(Context->Port,
+                    (PFILTER_REPLY_HEADER)&replyMessage,
+                    sizeof(replyMessage));
             }
         }
         // and remove the allowed action from the map.
@@ -353,17 +393,38 @@ Return Value
             }
             else
             {
-                result = ScanBufferWithServer(Context->username, value->fileID, actionRequested);
+                // result = ScanBufferWithServer(Context->username, value->fileID, actionRequested);
+                result = TRUE;
             }
+            replyMessage.ReplyHeader.Status = 0;
+            replyMessage.ReplyHeader.MessageId = message->MessageHeader.MessageId;
+
+            replyMessage.Reply.SafeToOpen = result;
+
+            printf("Replying message, SafeToOpen: %d\n", replyMessage.Reply.SafeToOpen);
+
+            hr = FilterReplyMessage(Context->Port,
+                (PFILTER_REPLY_HEADER)&replyMessage,
+                sizeof(replyMessage));
             
         }
         else
         {
             // Shouldn't happen - non suported action.
             result = FALSE;
+            replyMessage.ReplyHeader.Status = 0;
+            replyMessage.ReplyHeader.MessageId = message->MessageHeader.MessageId;
+
+            replyMessage.Reply.SafeToOpen = result;
+
+            printf("Replying message, SafeToOpen: %d\n", replyMessage.Reply.SafeToOpen);
+
+            hr = FilterReplyMessage(Context->Port,
+                (PFILTER_REPLY_HEADER)&replyMessage,
+                sizeof(replyMessage));
         }
 
-        replyMessage.ReplyHeader.Status = 0;
+        /*replyMessage.ReplyHeader.Status = 0;
         replyMessage.ReplyHeader.MessageId = message->MessageHeader.MessageId;
 
         replyMessage.Reply.SafeToOpen = result;
@@ -372,14 +433,11 @@ Return Value
         
         hr = FilterReplyMessage( Context->Port,
                                  (PFILTER_REPLY_HEADER) &replyMessage,
-                                 sizeof( replyMessage ) );
-
-        printf("FUCKME\n");
-        
+                                 sizeof( replyMessage ) );*/
 
         if (SUCCEEDED( hr )) {
 
-            printf( "Replied message\n" );
+            //printf( "Replied message\n" );
 
         } else {
 
@@ -482,23 +540,23 @@ main (
     Fnv1aHashString(username, hashedUsername);
 
 	// Initialize the agent listener.
-    if (!InitializeServer(&listenSocket))
-    {
-        return 1;
-    }
+ //   if (!InitializeServer(&listenSocket))
+ //   {
+ //       return 1;
+ //   }
 
-	agentServerContext.listenSocket = &listenSocket;
-	agentServerContext.username = hashedUsername;
+	//agentServerContext.listenSocket = &listenSocket;
+	//agentServerContext.username = hashedUsername;
 
-    // Create a thread to handle client connections.
-    serverThread = CreateThread(NULL, 0, ServerWorker, &agentServerContext, 0, &threadId);
-    if (serverThread == NULL)
-    {
-        printf("ERROR: Couldn't create server thread: %d\n", GetLastError());
-        closesocket(listenSocket);
-        WSACleanup();
-        return 1;
-    }
+ //   // Create a thread to handle client connections.
+ //   serverThread = CreateThread(NULL, 0, ServerWorker, &agentServerContext, 0, &threadId);
+ //   if (serverThread == NULL)
+ //   {
+ //       printf("ERROR: Couldn't create server thread: %d\n", GetLastError());
+ //       closesocket(listenSocket);
+ //       WSACleanup();
+ //       return 1;
+ //   }
 
     //
     //  Open a commuication channel to the filter
@@ -602,7 +660,7 @@ main (
     
 main_cleanup:
 
-    WaitForSingleObject(serverThread, INFINITE);
+    //WaitForSingleObject(serverThread, INFINITE);
 
     for (INT i = 0; threads[i] != NULL; ++i) {
         WaitForSingleObjectEx(threads[i], INFINITE, FALSE);
