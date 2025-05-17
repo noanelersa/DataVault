@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useTypingEffect } from './components/ui/useTypingEffect';
+import { useNavigate } from 'react-router-dom';
+import Navbar from './components/navbar'; 
 
 interface LoginPageProps {
   onLogin: (username: string) => void;
@@ -9,6 +11,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+
+  const navigate = useNavigate();
 
   const subtitle = useTypingEffect('Secure and track your sensitive files.', 25);
 
@@ -37,6 +41,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   
   return (
     <div className="min-h-screen flex bg-gradient-to-br from-[#0a1128] via-[#1b2a49] to-[#0a1128] text-white font-sans">
+      <Navbar />
       {/* Left Panel */}
       <div className="w-1/2 flex flex-col justify-center items-start px-20">
         <div className="mb-6">
@@ -56,7 +61,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         <form
           onSubmit={handleLogin}
           className="bg-white/10 backdrop-blur-md p-10 rounded-xl w-full max-w-md shadow-lg">
-          <h2 className="text-3xl font-semibold text-center mb-6 text-white">Sign in</h2>
+          <h2 className="text-3xl font-semibold text-center mb-6 text-white">Sign In</h2>
 
           {error && <p className="text-red-400 text-sm mb-4 text-center">{error}</p>}
 
@@ -91,7 +96,9 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             Submit
           </button>
           <p className="text-center mt-4 text-sm text-gray-300">
-           Don't have an account? <span className="text-blue-400 hover:underline cursor-pointer">Register</span>
+           Don't have an account?
+          <span onClick={() => navigate('/register')}
+          className="text-blue-400 hover:underline cursor-pointer">Register</span>
           </p>
         </form>
       </div>
