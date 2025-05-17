@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTypingEffect } from './components/ui/useTypingEffect';
 
 interface LoginPageProps {
   onLogin: (username: string) => void;
@@ -8,6 +9,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+
+  const subtitle = useTypingEffect('Secure and track your sensitive files.', 25);
 
   const existingUsers = [
     { username: 'roys', password: 'roys' },
@@ -31,84 +34,70 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       setError('Invalid username or password');
     }
   };
-
+  
   return (
-    <div
-      className="flex items-center justify-center min-h-screen w-full bg-cover bg-center bg-no-repeat"
-      style={{ backgroundColor: '#ffffff' }}
-    >
-      <form
-        onSubmit={handleLogin}
-        className="p-8 rounded-xl shadow-lg w-96 border"
-        style={{ backgroundColor: 'rgba(255, 255, 255, 0.8)', borderColor: '#0a0f1a' }}
-      >
-        <div className="flex justify-center mb-6">
-          <div
-            className="w-32 h-32 rounded-full overflow-hidden border-3"
-            style={{ borderColor: '#0a0f1a' }}
-          >
-            <img
-              src="/DataVaultLOGO.png"
-              alt="Profile"
-              className="w-full h-full object-cover"
+    <div className="min-h-screen flex bg-gradient-to-br from-[#0a1128] via-[#1b2a49] to-[#0a1128] text-white font-sans">
+      {/* Left Panel */}
+      <div className="w-1/2 flex flex-col justify-center items-start px-20">
+        <div className="mb-6">
+          <div className="text-5xl font-bold mb-4">DataVault</div>
+          <p className="text-lg text-gray-300 max-w-md mb-6">
+          {subtitle}
+          </p>
+          <button className="bg-gradient-to-r from-blue-500 to-cyan-400 text-white px-5 py-2 rounded-lg font-semibold hover:opacity-90 transition">
+            Learn More
+          </button>
+        </div>
+      </div>
+
+      {/* Right Panel - Login Form */}
+      <div className="w-1/2 flex items-center justify-center">
+      
+        <form
+          onSubmit={handleLogin}
+          className="bg-white/10 backdrop-blur-md p-10 rounded-xl w-full max-w-md shadow-lg">
+          <h2 className="text-3xl font-semibold text-center mb-6 text-white">Sign in</h2>
+
+          {error && <p className="text-red-400 text-sm mb-4 text-center">{error}</p>}
+
+          <div className="mb-4">
+            <label className="text-sm font-medium text-gray-300 mb-1 block">User Name</label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-4 py-2 rounded-lg bg-white/10 text-white border border-blue-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter username"
+              required
             />
           </div>
-        </div>
 
-        <p className="text-center mb-4 font-bold" style={{ color: '#0a0f1a' }}>{error}</p>
+          <div className="mb-6">
+            <label className="text-sm font-medium text-gray-300 mb-1 block">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-2 rounded-lg bg-white/10 text-white border border-blue-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter password"
+              required
+            />
+          </div>
 
-        <div className="mb-4">
-          <label className="block text-sm font-medium mb-1" style={{ color: '#0a0f1a' }}>
-            Username
-          </label>
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            required
-            className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2"
-            style={{
-              borderColor: '#0a0f1a',
-              color: '#0a0f1a',
-              backgroundColor: 'transparent',
-            }}
-          />
-        </div>
-
-        <div className="mb-6">
-          <label className="block text-sm font-medium mb-1" style={{ color: '#0a0f1a' }}>
-            Password
-          </label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2"
-            style={{
-              borderColor: '#0a0f1a',
-              color: '#0a0f1a',
-              backgroundColor: 'transparent',
-            }}
-          />
-        </div>
-
-        <button
-          type="submit"
-          className="w-full py-2 rounded transition-colors duration-300 border"
-          style={{
-            backgroundColor: '#0a0f1a',
-            borderColor: '#0a0f1a',
-            color: '#ffffff',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#1b2333')}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#0a0f1a')}
-        >
-          Login
-        </button>
-      </form>
+          <button
+            type="submit"
+            className="w-full bg-gradient-to-r from-blue-600 to-cyan-400 text-white py-2 rounded-lg font-bold hover:opacity-90 transition"
+          >
+            Submit
+          </button>
+          <p className="text-center mt-4 text-sm text-gray-300">
+           Don't have an account? <span className="text-blue-400 hover:underline cursor-pointer">Register</span>
+          </p>
+        </form>
+      </div>
     </div>
   );
+
 };
 
 export default LoginPage;
