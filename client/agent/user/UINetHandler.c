@@ -289,9 +289,6 @@ BOOLEAN HandleUIUpdatePermissions(char* recvbuf, int recvbuflen, const char* use
 
     char* extractedPath = ExtractFilePath(recvbuf);
     char* jsonAcl = ParseAccessControl(recvbuf);
-
-    
-    char *fileId = ExtractFileIdFromFile(extractedPath);
     
     if (!extractedPath || !jsonAcl) {
         printf("Error: Failed to parse input data.\n");
@@ -315,6 +312,8 @@ BOOLEAN HandleUIUpdatePermissions(char* recvbuf, int recvbuflen, const char* use
         free(jsonAcl);
         return FALSE;
     }
+
+    char *fileId = ExtractFileIdFromFile(extractedPath);
     
     char* entry = strstr(aclCopy, "{\"username\":");
     while (entry) {
