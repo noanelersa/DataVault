@@ -93,13 +93,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             type="submit"
             className="w-full bg-gradient-to-r from-blue-600 to-cyan-400 text-white py-2 rounded-lg font-bold hover:opacity-90 transition"
           >
-            Submit
+            Login
           </button>
-          <p className="text-center mt-4 text-sm text-gray-300">
-           Don't have an account?
-          <span onClick={() => navigate('/register')}
-          className="text-blue-400 hover:underline cursor-pointer">Register</span>
-          </p>
         </form>
       </div>
     </div>

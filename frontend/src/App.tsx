@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import LoginPage from './LoginPage';
 import FileManagementSystem from './FileManagementSystem';
-import RegisterPage from './RegisterPage';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 function App() {
@@ -26,7 +25,6 @@ function App() {
             )
           }
         />
-        <Route path="/register" element={<RegisterPage />} />
         <Route
           path="/files"
           element={
