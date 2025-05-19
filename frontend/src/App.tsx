@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import LoginPage from './LoginPage';
 import FileManagementSystem from './FileManagementSystem';
+import ContactUs from './ContactUsPage';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 function App() {
@@ -25,6 +26,7 @@ function App() {
             )
           }
         />
+        <Route path="/contact" element={<ContactUs />} />
         <Route
           path="/files"
           element={
