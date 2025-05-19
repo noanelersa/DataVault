@@ -157,15 +157,15 @@ char* ExtractFileIdFromFile(char* path) {
         return NULL; 
     }
 
-    char buffer[1024];
+    char buffer[AGENT_MAGIC_SIZE + AGENT_FILE_ID_SIZE];
     size_t bytesRead = fread(buffer, 1, sizeof(buffer), file);
     fclose(file);
 
-    if (strstr(buffer, "DTVL") == NULL) {
+    if (strstr(buffer, AGENT_MAGIC) == NULL) {
         return NULL; 
     }
 
-    char *fileIdStart = strstr(buffer, "DTVL") + 4; 
+    char *fileIdStart = buffer + AGENT_MAGIC_SIZE;
     if (!fileIdStart) {
         return NULL; 
     }
