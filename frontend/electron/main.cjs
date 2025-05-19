@@ -1,6 +1,4 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
-const commandsWhitelist = require('./commands_whitelist.cjs');
-const { agentHost, agentPort } = require('./config.cjs');
 const path = require('path');
 const net = require('net');
 
@@ -19,23 +17,10 @@ function createWindow() {
 app.whenReady().then(createWindow);
 
 ipcMain.handle('agent-command', async (event, command, args) => {
-    
     console.log(`Received command from frontend: ${command}`);
 
-    if (typeof command !== 'string' || !commandsWhitelist.includes(command)) {
-        return { status: 'error', message: 'Unknown command' };
-      }      
-
     if (command === 'upload' && args) {
-      const { name, description, acl, content } = args;
-      if (
-        typeof name !== 'string' ||
-        typeof description !== 'string' ||
-        !Array.isArray(acl) ||
-        !Array.isArray(content)
-      ) {
-        return { status: 'error', message: 'Invalid input' };
-      } 
+      const { name, description, acl, content } = args; 
   
       try {
         const newFile = { name, description, acl, content };
@@ -52,9 +37,9 @@ ipcMain.handle('agent-command', async (event, command, args) => {
         registerData = `\x01C:\\Users\\Rick\\Documents\\DT\\${name}$${registerData}$`;
   
         return new Promise((resolve, reject) => {
-            client.connect(agentPort, agentHost, () => {
-                client.write(Buffer.from(registerData, "binary"));
-              });
+          client.connect(2512, "192.168.71.128", () => {
+            client.write(Buffer.from(registerData, "binary"));
+          });
   
           client.on("data", (data) => {
             console.log("Agent succeeded:", data);
