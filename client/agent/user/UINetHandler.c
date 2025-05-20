@@ -161,6 +161,8 @@ BOOLEAN HandleUIRequest(char* recvbuf, int recvbuflen, const char* username)
         return HandleUIUpdatePermissions((recvbuf + 1), (recvbuflen - 1), username);
     case UI_REQUEST_DELETE_FILE:
         return HandleUIDeleteFile((recvbuf + 1), (recvbuflen - 1), username);
+    case UI_REQUEST_LOGIN:
+        return HandleUILogin((recvbuf + 1), (recvbuflen - 1));
     default:
         printf("Error: Invalid requrest type received from UI: %d\n", retquestType);
         return FALSE;
@@ -478,4 +480,103 @@ BOOLEAN HandleUIDeleteFile(char* recvbuf, int recvbuflen, const char* username) 
     free(extractedPath);
 
     return (statusCode == 200 || statusCode == 204); 
+}
+
+BOOLEAN HandleUILogin(char* recvbuf, int recvbuflen) {
+
+    char username[100] = {0};
+    char password[100] = {0};
+    char auth_token[256] = {0};
+    int i = 0, j = 0;
+
+    while (i < recvbuflen && recvbuf[i] != '|' && i < sizeof(username) - 1) {
+        username[i] = recvbuf[i];
+        i++;
+    }
+    username[i] = '\0';
+
+    if (recvbuf[i] != '|') {
+        printf("Invalid login format\n");
+        return FALSE;
+    }
+    i++;
+
+    while (i < recvbuflen && j < sizeof(password) - 1) {
+        password[j++] = recvbuf[i++];
+    }
+    password[j] = '\0';
+
+    char body[256];
+    snprintf(body, sizeof(body), "{\"username\":\"%s\",\"password\":\"%s\"}", username, password);
+    printf("Sending JSON: %s\n", body);
+
+    HINTERNET hInternet = InternetOpenA("LoginTest", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
+    if (!hInternet) {
+        printf("InternetOpen failed\n");
+        return FALSE;
+    }
+
+    HINTERNET hConnect = InternetConnectA(hInternet, "10.10.241.101", 8080, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
+    if (!hConnect) {
+        printf("InternetConnect failed\n");
+        InternetCloseHandle(hInternet);
+        return FALSE;
+    }
+
+    printf("InternetConnect succeeded\n");
+
+    HINTERNET hRequest = HttpOpenRequestA(hConnect, "POST", "/user/login", NULL, NULL, NULL,
+        INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 0);
+    if (!hRequest) {
+        printf("HttpOpenRequestA failed with %lu\n", GetLastError());
+        InternetCloseHandle(hConnect);
+        InternetCloseHandle(hInternet);
+        return FALSE;
+    }
+
+    const char* headers = "Content-Type: application/json\r\n";
+
+
+    const DWORD headersLen = (DWORD)strlen(headers);
+    const DWORD jsonLen = (DWORD)strlen(body);
+
+    BOOL sent = HttpSendRequestA(hRequest, headers, headersLen, (LPVOID)body, jsonLen);
+    if (!sent) {
+        printf("HttpSendRequestA failed with error: %lu\n", GetLastError());
+        InternetCloseHandle(hRequest);
+        InternetCloseHandle(hConnect);
+        InternetCloseHandle(hInternet);
+        return FALSE;
+    }
+
+    DWORD statusCode = 0;
+    DWORD statusCodeSize = sizeof(statusCode);
+    if (!HttpQueryInfoA(hRequest, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &statusCode, &statusCodeSize, NULL)) {
+        printf("HttpQueryInfoA failed: %lu\n", GetLastError());
+    } else {
+        printf("HTTP Status Code: %ld\n", statusCode);
+    }
+
+    char response[1024] = {0};
+    DWORD bytesRead = 0;
+    if (InternetReadFile(hRequest, response, sizeof(response) - 1, &bytesRead)) {
+        response[bytesRead] = '\0';
+        printf("Response:\n%s\n", response);
+
+        if (bytesRead > 0 && bytesRead < sizeof(auth_token)) {
+        memcpy(auth_token, response, bytesRead);
+        auth_token[bytesRead] = '\0';  
+        printf("Auth token: %s\n", auth_token);
+        } else {
+        printf("Invalid token size or empty response.\n");
+        }
+            } else {
+                printf("InternetReadFile failed\n");
+            }
+
+    InternetCloseHandle(hRequest);
+    InternetCloseHandle(hConnect);
+    InternetCloseHandle(hInternet);
+
+    return statusCode == 200;
 }

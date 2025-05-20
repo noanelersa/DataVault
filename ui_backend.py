@@ -10,11 +10,10 @@ CORS(app)
 BASE_PATH = "C:\\Users\\alice\\Documents\\DT\\"
 
 class AgentActionType(Enum):
-
     REGISTER_FILE = 1
     UPDATE_PERMISSIONS = 2
     DELETE_FILE = 3
-
+    LOGIN = 4
 
 def send_to_agent(data: bytes):
     try:
@@ -25,6 +24,7 @@ def send_to_agent(data: bytes):
             resp = sock.recv(1024)
             print(resp)
             sock.shutdown(socket.SHUT_RDWR)
+            return resp
     except Exception as e:
         print("Error communicating with agent:")
         print(e)
@@ -79,4 +79,35 @@ def delete_file(file_name):
         print(e)
         return {"status": "fail", "error": "Error during file deleting."}, 500
     
+
+@app.route("/login", methods=["POST"])
+def login():
+    try:
+        login_data = request.json
+        username = login_data.get("username")
+        password = login_data.get("password")
+
+        if not username or not password:
+            return {"status": "fail", "error": "Missing credentials"}, 400
+
+        data = AgentActionType.LOGIN.value.to_bytes(1, byteorder='big') + f"{username}|{password}".encode()
+        response = send_to_agent(data)
+
+        if not response:
+            return {"status": "fail", "error": "No response from agent"}, 500
+        
+
+
+        if response[0] == 1:
+            return {"status": "success"}, 200
+        else:
+            return {"status": "fail", "error": "Invalid credentials"}, 401
+
+    except Exception as e:
+        print("Error in login:")
+        print(e)
+        return {"status": "fail", "error": "Error during login process."}, 500
+
+        
+
 app.run(host="0.0.0.0", port="2513", debug=True)
