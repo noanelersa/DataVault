@@ -41,6 +41,7 @@ Environment:
 #define UI_REQUEST_FILE_REGISTER 1
 #define UI_REQUEST_UPDATE_PERMISSIONS 2
 #define UI_REQUEST_DELETE_FILE 3
+#define UI_REQUEST_LOGIN 4
 
 typedef struct _AGENT_SERVER_CONTEXT {
 
@@ -80,5 +81,11 @@ HandleUIDeleteFile(
     char* recvbuf,
     int recvbuflen,
     const char* username);
+
+BOOLEAN
+HandleUILogin(
+    char* recvbuf,
+    int recvbuflen
+);
 
 #endif //  __UI_NET_HANDLER_H__
