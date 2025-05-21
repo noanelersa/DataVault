@@ -62,7 +62,9 @@ BOOLEAN
 HandleUIRequest(
     char* recvbuf,
     int recvbuflen,
-    const char* username);
+    const char* username,
+    char* outStrBuf,
+    int outBufSize);
 
 BOOLEAN 
 HandleUIFileRegister(
@@ -85,7 +87,9 @@ HandleUIDeleteFile(
 BOOLEAN
 HandleUILogin(
     char* recvbuf,
-    int recvbuflen
+    int recvbuflen,
+    char* token,
+    int tokenSize
 );
 
 #endif //  __UI_NET_HANDLER_H__

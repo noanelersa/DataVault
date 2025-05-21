@@ -71,6 +71,7 @@ DWORD WINAPI ServerWorker(LPVOID lpParam)
 {
     SOCKET clientSocket;
     char recvbuf[MAX_UI_MESSAGE_SIZE] = { 0 };
+    char outBuf[1024] = { 0 };
     int iResult = 0, iSendResult = 0;
 
 	// Parse the agent server context.
@@ -98,11 +99,16 @@ DWORD WINAPI ServerWorker(LPVOID lpParam)
             {
                 printf("Bytes received from UI: %d\n", iResult);
 
-				// Handle the UI request.
-				BOOLEAN ret = HandleUIRequest(recvbuf, iResult, username);
+                memset(outBuf, 0, sizeof(outBuf));
 
-				// Send the response to the UI.
-                iSendResult = send(clientSocket, &((char)ret), iResult, 0);
+                BOOLEAN success = HandleUIRequest(recvbuf,iResult,username,outBuf,sizeof(outBuf));
+
+                char sendBuf[1050] = { 0 };
+                sendBuf[0] = (char)success; 
+                strncpy(sendBuf + 1, outBuf, sizeof(sendBuf) - 1);
+
+                int totalSize = 1 + (int)strlen(sendBuf + 1); 
+                iSendResult = send(clientSocket, sendBuf, totalSize, 0);
 
                 if (iSendResult == SOCKET_ERROR)
                 {
@@ -112,6 +118,8 @@ DWORD WINAPI ServerWorker(LPVOID lpParam)
                     return 1;
                 }
                 printf("Bytes sent TO UI: %d\n", iSendResult);
+                printf("Sending to UI: success=%d, message=%s\n", success, outBuf);
+
             }
             else if (iResult == 0)
             {
@@ -143,7 +151,7 @@ DWORD WINAPI ServerWorker(LPVOID lpParam)
     return 0;
 }
 
-BOOLEAN HandleUIRequest(char* recvbuf, int recvbuflen, const char* username)
+BOOLEAN HandleUIRequest(char* recvbuf, int recvbuflen, const char* username,char* outStrBuf, int outBufSize)
 {
     if (recvbuflen == 0)
     {
@@ -162,7 +170,7 @@ BOOLEAN HandleUIRequest(char* recvbuf, int recvbuflen, const char* username)
     case UI_REQUEST_DELETE_FILE:
         return HandleUIDeleteFile((recvbuf + 1), (recvbuflen - 1), username);
     case UI_REQUEST_LOGIN:
-        return HandleUILogin((recvbuf + 1), (recvbuflen - 1));
+        return HandleUILogin((recvbuf + 1), (recvbuflen - 1),outStrBuf, outBufSize);
     default:
         printf("Error: Invalid requrest type received from UI: %d\n", retquestType);
         return FALSE;
@@ -482,7 +490,7 @@ BOOLEAN HandleUIDeleteFile(char* recvbuf, int recvbuflen, const char* username) 
     return (statusCode == 200 || statusCode == 204); 
 }
 
-BOOLEAN HandleUILogin(char* recvbuf, int recvbuflen) {
+BOOLEAN HandleUILogin(char* recvbuf, int recvbuflen, char* token, int tokenSize) {
 
     char username[100] = {0};
     char password[100] = {0};
@@ -516,7 +524,7 @@ BOOLEAN HandleUILogin(char* recvbuf, int recvbuflen) {
         return FALSE;
     }
 
-    HINTERNET hConnect = InternetConnectA(hInternet, "10.10.241.101", 8080, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
+    HINTERNET hConnect = InternetConnectA(hInternet, "10.10.241.106", 8080, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
     if (!hConnect) {
         printf("InternetConnect failed\n");
         InternetCloseHandle(hInternet);
@@ -567,6 +575,7 @@ BOOLEAN HandleUILogin(char* recvbuf, int recvbuflen) {
         memcpy(auth_token, response, bytesRead);
         auth_token[bytesRead] = '\0';  
         printf("Auth token: %s\n", auth_token);
+        snprintf(token, tokenSize, "%s", auth_token);
         } else {
         printf("Invalid token size or empty response.\n");
         }
