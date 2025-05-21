@@ -25,6 +25,8 @@ const FileManagementSystem = () => {
     { id: 5, name: 'taliam' },
     { id: 6, name: 'noan' },
   ];
+
+  let alerts = []
   
   const [files, setFiles] = useState([]);
 
@@ -84,6 +86,24 @@ const FileManagementSystem = () => {
         setFiles((prevFiles) => [...prevFiles, newFile]);
     }
   };
+
+  const getMyAlerts = () => {
+      fetch('http://localhost:2513/alerts/user/7075ed12', {
+        method: 'GET', 
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          alerts = data
+          console.log('Response:', data);
+        })
+        .catch((error) => {
+          console.error('Error:', error);
+          setResponseMessage('Error sending data');
+        });
+    };
 
   const triggerFileInput = () => {
     fileInputRef.current.click();
@@ -498,10 +518,7 @@ const FileManagementSystem = () => {
     <div className="space-y-4">
       <h2 className="text-2xl font-bold">Alerts</h2>
       <div className="space-y-2">
-        {[
-          { id: 1, message: 'User1 accessed report.pdf', time: '2 hours ago' },
-          { id: 2, message: 'User2 downloaded data.xlsx', time: '1 day ago' }
-        ].map(alert => (
+        {alerts.map(alert => (
           <div key={alert.id} className="flex items-center p-4 border rounded bg-white">
             <AlertTriangle className="mr-2 text-yellow-500" size={16} />
             <div>
@@ -550,7 +567,9 @@ const FileManagementSystem = () => {
               <Button variant={page === 'files' ? 'default' : 'ghost'} onClick={() => setPage('files')}>
                 <FileText className="mr-2" size={16} /> Files
               </Button>
-              <Button variant={page === 'alerts' ? 'default' : 'ghost'} onClick={() => setPage('alerts')}>
+              <Button variant={page === 'alerts' ? 'default' : 'ghost'} onClick={() => {
+                getMyAlerts()
+                setPage('alerts')}}>
                 <Bell className="mr-2" size={16} /> Alerts
               </Button>
               <Button variant={page === 'users' ? 'default' : 'ghost'} onClick={() => setPage('users')}>

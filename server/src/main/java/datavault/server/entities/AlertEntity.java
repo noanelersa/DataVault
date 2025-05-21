@@ -33,19 +33,19 @@ public class AlertEntity {
     private String action;
 
     @Column(nullable = false)
-    private Integer severity;  // 1 = low, 3 = high
+    private Integer severity;
 
     private String message;
 
     @Column(name = "created_at")
     private java.sql.Timestamp createdAt;
 
-    public AlertEntity(FileEntity file, UserEntity user, Action action, Integer sev, String message) {
+    public AlertEntity(FileEntity file, UserEntity user, Action action, String message) {
         this.file = file;
         this.user = user;
         this.action = action.name();
         this.message = message;
-        this.severity = sev;
+        this.severity = action.getSeverity();
         this.createdAt = Timestamp.from(Instant.now());
     }
 }
