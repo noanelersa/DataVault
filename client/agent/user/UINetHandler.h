@@ -39,6 +39,8 @@ Environment:
 
 // UI request types
 #define UI_REQUEST_FILE_REGISTER 1
+#define UI_REQUEST_UPDATE_PERMISSIONS 2
+#define UI_REQUEST_DELETE_FILE 3
 
 typedef struct _AGENT_SERVER_CONTEXT {
 
@@ -63,6 +65,18 @@ HandleUIRequest(
 
 BOOLEAN 
 HandleUIFileRegister(
+    char* recvbuf,
+    int recvbuflen,
+    const char* username);
+
+BOOLEAN 
+HandleUIUpdatePermissions(
+    char* recvbuf,
+    int recvbuflen,
+    const char* username);
+    
+BOOLEAN 
+HandleUIDeleteFile(
     char* recvbuf,
     int recvbuflen,
     const char* username);

@@ -22,6 +22,7 @@ def send_to_agent(data: bytes):
             sock.send(data)
             resp = sock.recv(1024)
             print(resp)
+            sock.shutdown(socket.SHUT_RDWR)
     except Exception as e:
         print("Error communicating with agent:")
         print(e)
@@ -34,6 +35,7 @@ def serialize_acl(acl_list):
         f"{user['name']};{'\x00' if user['access'] == 'read' else '\x01'}"
         for user in acl_list
     )
+
 
 
 @app.route("/register", methods=["POST"])
@@ -67,15 +69,49 @@ def update_permissions():
         return {"status": "fail", "error": "Error during permission update process."}, 500
 
 
-@app.route("/delete/<file_id>" , methods=["DELETE"])
-def delete_file(file_id):
+@app.route("/delete/<file_name>" , methods=["DELETE"])
+def delete_file(file_name):
     try:
+<<<<<<< HEAD
         delete_data = chr(AgentActionType.DELETE_FILE.value).encode() + f"{BASE_PATH}{file_id}$".encode()
+=======
+        delete_data = AgentActionType.DELETE_FILE.value.to_bytes(1,byteorder='big') + f"{BASE_PATH}{file_name}$".encode()
+>>>>>>> 4853756 (fix(delete): send full file name instead of index to agent)
         send_to_agent(delete_data)
         return {"status":"success"}
     except Exception as e:
         print("Error deleting file:")
         print(e)
         return {"status": "fail", "error": "Error during file deleting."}, 500
+
+
+@app.route("/update-permissions", methods=["POST"])
+def update_permissions():
+    file_data = request.json
+
+    try:
+        register_data = ""
+        for user in file_data['sharedWith']:
+            register_data += f"{user['name']};{'\x00' if user['access'] == 'read' else '\x01'}|"
+        register_data = register_data[:-1]  
+
+        register_data = f"\x02C:\\Users\\Rick\\Documents\\DT\\{file_data['name']}$" + register_data + "$"
+
+        print(register_data.encode())  
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect(("192.168.20.1", 2512))
+
+        sock.send(register_data.encode())
+        resp = sock.recv(1024)
+        print(resp)
+
+    except Exception as e:
+        print("Error sending permissions update:")
+        print(e)
+        return {"status": "fail", "error": str(e)}, 500
+
+    return {"status": "success"}
+
 
 app.run(host="0.0.0.0", port="2513", debug=True)
