@@ -135,7 +135,7 @@
       <TreatWarningAsError>false</TreatWarningAsError>
       <WarningLevel>Level4</WarningLevel>
       <PreprocessorDefinitions>%(PreprocessorDefinitions);UNICODE;_UNICODE</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(IFSKIT_INC_PATH);$(DDK_INC_PATH);..\inc</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\magshimim\Desktop\DataVault\cybersecurity-FinalProject\client\agent\user;%(AdditionalIncludeDirectories);$(IFSKIT_INC_PATH);$(DDK_INC_PATH);..\inc</AdditionalIncludeDirectories>
       <ExceptionHandling>
       </ExceptionHandling>
     </ClCompile>
@@ -149,6 +149,7 @@
     </ResourceCompile>
     <Link>
       <AdditionalDependencies>%(AdditionalDependencies);fltLib.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Users\magshimim\Desktop\DataVault\cybersecurity-FinalProject\client\agent\user;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
@@ -173,6 +174,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="DriverHandler.c" />
     <ClCompile Include="ServerNetHandler.c" />
     <ClCompile Include="scanUser.c" />
     <ClCompile Include="UINetHandler.c" />
@@ -189,8 +191,10 @@
     <None Exclude="@(None)" Include="*.def;*.bat;*.hpj;*.asmx" />
   </ItemGroup>
   <ItemGroup>
-	<ClInclude Exclude="@(ClInclude)" Include="ServerNetHandler.h" />
-	<ClInclude Include="UINetHandler.h" />
+    <ClInclude Include="DriverHandler.h" />
+    <ClInclude Exclude="@(ClInclude)" Include="ServerNetHandler.h" />
+    <ClInclude Include="UINetHandler.h" />
+    <ClInclude Include="Utils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

@@ -42,7 +42,7 @@ typedef struct _SCANNER_NOTIFICATION {
 
 typedef struct _SCANNER_REPLY {
 
-    BOOLEAN AllowAction;
+    unsigned char AllowAction;
     
 } SCANNER_REPLY, *PSCANNER_REPLY;
 
