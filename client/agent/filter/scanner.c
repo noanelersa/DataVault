@@ -48,7 +48,7 @@ ULONG ScannedExtensionCount;
 //  The default extension to scan if not configured in the registry
 //
 
-UNICODE_STRING ScannedExtensionDefault = RTL_CONSTANT_STRING( L"doc" );
+UNICODE_STRING ScannedExtensionDefault = RTL_CONSTANT_STRING(L"doc");
 
 //
 //  Function prototypes
@@ -65,80 +65,94 @@ NTSTATUS
     );
 
 PFN_IoOpenDriverRegistryKey
-ScannerGetIoOpenDriverRegistryKey (
+ScannerGetIoOpenDriverRegistryKey(
     VOID
-    );
+);
 
 NTSTATUS
-ScannerOpenServiceParametersKey (
+ScannerOpenServiceParametersKey(
     _In_ PDRIVER_OBJECT DriverObject,
     _In_ PUNICODE_STRING ServiceRegistryPath,
     _Out_ PHANDLE ServiceParametersKey
-    );
+);
 
 NTSTATUS
 ScannerInitializeScannedExtensions(
     _In_ PDRIVER_OBJECT DriverObject,
     _In_ PUNICODE_STRING RegistryPath
-    );
+);
 
 VOID
 ScannerFreeExtensions(
-    );
+);
 
 NTSTATUS
-ScannerAllocateUnicodeString (
+ScannerAllocateUnicodeString(
     _Inout_ PUNICODE_STRING String
-    );
+);
 
 VOID
-ScannerFreeUnicodeString (
+ScannerFreeUnicodeString(
     _Inout_ PUNICODE_STRING String
-    );
+);
 
 NTSTATUS
-ScannerPortConnect (
+ScannerPortConnect(
     _In_ PFLT_PORT ClientPort,
     _In_opt_ PVOID ServerPortCookie,
     _In_reads_bytes_opt_(SizeOfContext) PVOID ConnectionContext,
     _In_ ULONG SizeOfContext,
-    _Outptr_result_maybenull_ PVOID *ConnectionCookie
-    );
+    _Outptr_result_maybenull_ PVOID* ConnectionCookie
+);
 
 VOID
-ScannerPortDisconnect (
+ScannerPortDisconnect(
     _In_opt_ PVOID ConnectionCookie
-    );
+);
+
+VOID
+ScannerGetFullFilePath(
+    _In_ PFLT_CALLBACK_DATA Data,
+    _Out_writes_(SCANNER_FILE_NAME_SIZE) char* FileName
+);
 
 NTSTATUS
-ScannerpScanFileInUserMode (
+ScannerpCheckActionInUserMode(
+    _In_ PFLT_CALLBACK_DATA Data,
     _In_ PFLT_INSTANCE Instance,
     _In_ PFILE_OBJECT FileObject,
-    _Out_ PBOOLEAN SafeToOpen,
-    enum EFileAction action
-    );
+    _In_ enum EFileAction Action,
+    _Out_ PBOOLEAN SafeToOpen
+);
+
+NTSTATUS
+ScannerpUpdateHashInUserMode(
+    _In_ PFLT_CALLBACK_DATA Data,
+    _In_ PFLT_INSTANCE Instance,
+    _In_ PFILE_OBJECT FileObject
+);
 
 BOOLEAN
-ScannerpCheckExtension (
+ScannerpCheckExtension(
     _In_ PUNICODE_STRING Extension
-    );
+);
 
 //
 //  Assign text sections for each routine.
 //
 
 #ifdef ALLOC_PRAGMA
-    #pragma alloc_text(INIT, DriverEntry)
-    #pragma alloc_text(INIT, ScannerGetIoOpenDriverRegistryKey)
-    #pragma alloc_text(INIT, ScannerOpenServiceParametersKey)
-    #pragma alloc_text(INIT, ScannerInitializeScannedExtensions)
-    #pragma alloc_text(PAGE, ScannerInstanceSetup)
-    #pragma alloc_text(PAGE, ScannerPreCreate)
-    #pragma alloc_text(PAGE, ScannerPortConnect)
-    #pragma alloc_text(PAGE, ScannerPortDisconnect)
-    #pragma alloc_text(PAGE, ScannerFreeExtensions)
-    #pragma alloc_text(PAGE, ScannerAllocateUnicodeString)
-    #pragma alloc_text(PAGE, ScannerFreeUnicodeString)
+#pragma alloc_text(INIT, DriverEntry)
+#pragma alloc_text(INIT, ScannerGetIoOpenDriverRegistryKey)
+#pragma alloc_text(INIT, ScannerOpenServiceParametersKey)
+#pragma alloc_text(INIT, ScannerInitializeScannedExtensions)
+#pragma alloc_text(PAGE, ScannerInstanceSetup)
+#pragma alloc_text(PAGE, ScannerPreCreate)
+#pragma alloc_text(PAGE, ScannerPortConnect)
+#pragma alloc_text(PAGE, ScannerPortDisconnect)
+#pragma alloc_text(PAGE, ScannerFreeExtensions)
+#pragma alloc_text(PAGE, ScannerAllocateUnicodeString)
+#pragma alloc_text(PAGE, ScannerFreeUnicodeString)
 #endif
 
 
@@ -197,7 +211,7 @@ const FLT_CONTEXT_REGISTRATION ContextRegistration[] = {
 
 const FLT_REGISTRATION FilterRegistration = {
 
-    sizeof( FLT_REGISTRATION ),         //  Size
+    sizeof(FLT_REGISTRATION),         //  Size
     FLT_REGISTRATION_VERSION,           //  Version
     0,                                  //  Flags
     ContextRegistration,                //  Context Registration.
@@ -219,10 +233,10 @@ const FLT_REGISTRATION FilterRegistration = {
 ////////////////////////////////////////////////////////////////////////////
 
 NTSTATUS
-DriverEntry (
+DriverEntry(
     _In_ PDRIVER_OBJECT DriverObject,
     _In_ PUNICODE_STRING RegistryPath
-    )
+)
 /*++
 
 Routine Description:
@@ -253,18 +267,18 @@ Return Value:
     //  Default to NonPagedPoolNx for non paged pool allocations where supported.
     //
 
-    ExInitializeDriverRuntime( DrvRtPoolNxOptIn );
+    ExInitializeDriverRuntime(DrvRtPoolNxOptIn);
 
     //
     //  Register with filter manager.
     //
 
-    status = FltRegisterFilter( DriverObject,
-                                &FilterRegistration,
-                                &ScannerData.Filter );
+    status = FltRegisterFilter(DriverObject,
+        &FilterRegistration,
+        &ScannerData.Filter);
 
 
-    if (!NT_SUCCESS( status )) {
+    if (!NT_SUCCESS(status)) {
 
         return status;
     }
@@ -273,9 +287,9 @@ Return Value:
     // Obtain the extensions to scan from the registry
     //
 
-    status = ScannerInitializeScannedExtensions( DriverObject, RegistryPath );
+    status = ScannerInitializeScannedExtensions(DriverObject, RegistryPath);
 
-    if (!NT_SUCCESS( status )) {
+    if (!NT_SUCCESS(status)) {
 
         status = STATUS_SUCCESS;
 
@@ -287,69 +301,69 @@ Return Value:
     //  Create a communication port.
     //
 
-    RtlInitUnicodeString( &uniString, ScannerPortName );
+    RtlInitUnicodeString(&uniString, ScannerPortName);
 
     //
     //  We secure the port so only ADMINs & SYSTEM can acecss it.
     //
 
-    status = FltBuildDefaultSecurityDescriptor( &sd, FLT_PORT_ALL_ACCESS );
+    status = FltBuildDefaultSecurityDescriptor(&sd, FLT_PORT_ALL_ACCESS);
 
-    if (NT_SUCCESS( status )) {
+    if (NT_SUCCESS(status)) {
 
-        InitializeObjectAttributes( &oa,
-                                    &uniString,
-                                    OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE,
-                                    NULL,
-                                    sd );
+        InitializeObjectAttributes(&oa,
+            &uniString,
+            OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE,
+            NULL,
+            sd);
 
-        status = FltCreateCommunicationPort( ScannerData.Filter,
-                                             &ScannerData.ServerPort,
-                                             &oa,
-                                             NULL,
-                                             ScannerPortConnect,
-                                             ScannerPortDisconnect,
-                                             NULL,
-                                             1 );
+        status = FltCreateCommunicationPort(ScannerData.Filter,
+            &ScannerData.ServerPort,
+            &oa,
+            NULL,
+            ScannerPortConnect,
+            ScannerPortDisconnect,
+            NULL,
+            1);
         //
         //  Free the security descriptor in all cases. It is not needed once
         //  the call to FltCreateCommunicationPort() is made.
         //
 
-        FltFreeSecurityDescriptor( sd );
+        FltFreeSecurityDescriptor(sd);
 
-        if (NT_SUCCESS( status )) {
+        if (NT_SUCCESS(status)) {
 
             //
             //  Start filtering I/O.
             //
 
-            status = FltStartFiltering( ScannerData.Filter );
+            status = FltStartFiltering(ScannerData.Filter);
 
-            if (NT_SUCCESS( status )) {
+            if (NT_SUCCESS(status)) {
 
                 return STATUS_SUCCESS;
             }
 
-            FltCloseCommunicationPort( ScannerData.ServerPort );
+            FltCloseCommunicationPort(ScannerData.ServerPort);
         }
     }
 
     ScannerFreeExtensions();
 
-    FltUnregisterFilter( ScannerData.Filter );
+    FltUnregisterFilter(ScannerData.Filter);
 
     return status;
 }
 
 
 PFN_IoOpenDriverRegistryKey
-ScannerGetIoOpenDriverRegistryKey (
+ScannerGetIoOpenDriverRegistryKey(
     VOID
-    )
+)
 {
     static PFN_IoOpenDriverRegistryKey pIoOpenDriverRegistryKey = NULL;
-    UNICODE_STRING FunctionName = {0};
+    UNICODE_STRING FunctionName = { 0 };
 
     if (pIoOpenDriverRegistryKey == NULL) {
 
@@ -362,11 +376,11 @@ ScannerGetIoOpenDriverRegistryKey (
 }
 
 NTSTATUS
-ScannerOpenServiceParametersKey (
+ScannerOpenServiceParametersKey(
     _In_ PDRIVER_OBJECT DriverObject,
     _In_ PUNICODE_STRING ServiceRegistryPath,
     _Out_ PHANDLE ServiceParametersKey
-    )
+)
 /*++
 
 Routine Description:
@@ -410,34 +424,35 @@ Return Value:
         //  Open the parameters key using the API
         //
 
-        status = pIoOpenDriverRegistryKey( DriverObject,
-                                           DriverRegKeyParameters,
-                                           KEY_READ,
-                                           0,
-                                           &ParametersKey );
+        status = pIoOpenDriverRegistryKey(DriverObject,
+            DriverRegKeyParameters,
+            KEY_READ,
+            0,
+            &ParametersKey);
 
-        if (!NT_SUCCESS( status )) {
+        if (!NT_SUCCESS(status)) {
 
             goto ScannerOpenServiceParametersKeyCleanup;
         }
 
-    } else {
+    }
+    else {
 
         //
         //  Open specified service root key
         //
 
-        InitializeObjectAttributes( &Attributes,
-                                    ServiceRegistryPath,
-                                    OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE,
-                                    NULL,
-                                    NULL );
+        InitializeObjectAttributes(&Attributes,
+            ServiceRegistryPath,
+            OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE,
+            NULL,
+            NULL);
 
-        status = ZwOpenKey( &ServiceRegKey,
-                            KEY_READ,
-                            &Attributes );
+        status = ZwOpenKey(&ServiceRegKey,
+            KEY_READ,
+            &Attributes);
 
-        if (!NT_SUCCESS( status )) {
+        if (!NT_SUCCESS(status)) {
 
             goto ScannerOpenServiceParametersKeyCleanup;
         }
@@ -446,19 +461,19 @@ Return Value:
         //  Open the parameters key relative to service key path
         //
 
-        RtlInitUnicodeString( &Subkey, L"Parameters" );
+        RtlInitUnicodeString(&Subkey, L"Parameters");
 
-        InitializeObjectAttributes( &Attributes,
-                                    &Subkey,
-                                    OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE,
-                                    ServiceRegKey,
-                                    NULL );
+        InitializeObjectAttributes(&Attributes,
+            &Subkey,
+            OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE,
+            ServiceRegKey,
+            NULL);
 
-        status = ZwOpenKey( &ParametersKey,
-                            KEY_READ,
-                            &Attributes );
+        status = ZwOpenKey(&ParametersKey,
+            KEY_READ,
+            &Attributes);
 
-        if (!NT_SUCCESS( status )) {
+        if (!NT_SUCCESS(status)) {
 
             goto ScannerOpenServiceParametersKeyCleanup;
         }
@@ -474,7 +489,7 @@ ScannerOpenServiceParametersKeyCleanup:
 
     if (ServiceRegKey != NULL) {
 
-        ZwClose( ServiceRegKey );
+        ZwClose(ServiceRegKey);
     }
 
     return status;
@@ -485,7 +500,7 @@ NTSTATUS
 ScannerInitializeScannedExtensions(
     _In_ PDRIVER_OBJECT DriverObject,
     _In_ PUNICODE_STRING RegistryPath
-    )
+)
 /*++
 
 Routine Descrition:
@@ -526,11 +541,11 @@ Return Value:
     //  Open service parameters key to query values from.
     //
 
-    status = ScannerOpenServiceParametersKey( DriverObject,
-                                              RegistryPath,
-                                              &driverRegKey );
+    status = ScannerOpenServiceParametersKey(DriverObject,
+        RegistryPath,
+        &driverRegKey);
 
-    if (!NT_SUCCESS( status )) {
+    if (!NT_SUCCESS(status)) {
 
         driverRegKey = NULL;
         goto ScannerInitializeScannedExtensionsCleanup;
@@ -540,16 +555,16 @@ Return Value:
     //   Query the length of the reg value
     //
 
-    RtlInitUnicodeString( &valueName, L"Extensions" );
+    RtlInitUnicodeString(&valueName, L"Extensions");
 
-    status = ZwQueryValueKey( driverRegKey,
-                              &valueName,
-                              KeyValuePartialInformation,
-                              NULL,
-                              0,
-                              &valueLength );
+    status = ZwQueryValueKey(driverRegKey,
+        &valueName,
+        KeyValuePartialInformation,
+        NULL,
+        0,
+        &valueLength);
 
-    if (status!=STATUS_BUFFER_TOO_SMALL && status!=STATUS_BUFFER_OVERFLOW) {
+    if (status != STATUS_BUFFER_TOO_SMALL && status != STATUS_BUFFER_OVERFLOW) {
 
         status = STATUS_INVALID_PARAMETER;
         goto ScannerInitializeScannedExtensionsCleanup;
@@ -559,9 +574,9 @@ Return Value:
     //  Extract the path.
     //
 
-    valueBuffer = ExAllocatePoolZero( NonPagedPool,
-                                      valueLength,
-                                      SCANNER_REG_TAG );
+    valueBuffer = ExAllocatePoolZero(NonPagedPool,
+        valueLength,
+        SCANNER_REG_TAG);
 
     if (valueBuffer == NULL) {
 
@@ -569,14 +584,14 @@ Return Value:
         goto ScannerInitializeScannedExtensionsCleanup;
     }
 
-    status = ZwQueryValueKey( driverRegKey,
-                              &valueName,
-                              KeyValuePartialInformation,
-                              valueBuffer,
-                              valueLength,
-                              &valueLength );
+    status = ZwQueryValueKey(driverRegKey,
+        &valueName,
+        KeyValuePartialInformation,
+        valueBuffer,
+        valueLength,
+        &valueLength);
 
-    if (!NT_SUCCESS( status )) {
+    if (!NT_SUCCESS(status)) {
 
         goto ScannerInitializeScannedExtensionsCleanup;
     }
@@ -591,13 +606,13 @@ Return Value:
 
     while (*ch != '\0') {
 
-        ch = ch + wcslen( ch ) + 1;
+        ch = ch + wcslen(ch) + 1;
         count++;
     }
 
-    ScannedExtensions = ExAllocatePoolZero( PagedPool,
-                                            count * sizeof(UNICODE_STRING),
-                                            SCANNER_STRING_TAG );
+    ScannedExtensions = ExAllocatePoolZero(PagedPool,
+        count * sizeof(UNICODE_STRING),
+        SCANNER_STRING_TAG);
 
     if (ScannedExtensions == NULL) {
         goto ScannerInitializeScannedExtensionsCleanup;
@@ -608,21 +623,21 @@ Return Value:
 
     while (ScannedExtensionCount < count) {
 
-        length = wcslen( ch ) * sizeof(WCHAR);
+        length = wcslen(ch) * sizeof(WCHAR);
 
-        ext->MaximumLength = (USHORT) length;
+        ext->MaximumLength = (USHORT)length;
 
-        status = ScannerAllocateUnicodeString( ext );
+        status = ScannerAllocateUnicodeString(ext);
 
-        if (!NT_SUCCESS( status )) {
+        if (!NT_SUCCESS(status)) {
             goto ScannerInitializeScannedExtensionsCleanup;
         }
 
         ext->Length = (USHORT)length;
 
-        RtlCopyMemory( ext->Buffer, ch, length );
+        RtlCopyMemory(ext->Buffer, ch, length);
 
-        ch = ch + length/sizeof(WCHAR) + 1;
+        ch = ch + length / sizeof(WCHAR) + 1;
 
         ScannedExtensionCount++;
 
@@ -640,16 +655,16 @@ ScannerInitializeScannedExtensionsCleanup:
 
     if (valueBuffer != NULL) {
 
-        ExFreePoolWithTag( valueBuffer, SCANNER_REG_TAG );
+        ExFreePoolWithTag(valueBuffer, SCANNER_REG_TAG);
         valueBuffer = NULL;
     }
 
     if (driverRegKey != NULL) {
 
-        ZwClose( driverRegKey );
+        ZwClose(driverRegKey);
     }
 
-    if (!NT_SUCCESS( status )) {
+    if (!NT_SUCCESS(status)) {
 
         ScannerFreeExtensions();
     }
@@ -660,7 +675,7 @@ ScannerInitializeScannedExtensionsCleanup:
 
 VOID
 ScannerFreeExtensions(
-    )
+)
 /*++
 
 Routine Descrition:
@@ -688,13 +703,13 @@ Return Value:
 
         if (ScannedExtensions != &ScannedExtensionDefault) {
 
-            ScannerFreeUnicodeString( ScannedExtensions + ScannedExtensionCount );
+            ScannerFreeUnicodeString(ScannedExtensions + ScannedExtensionCount);
         }
     }
 
     if (ScannedExtensions != &ScannedExtensionDefault && ScannedExtensions != NULL) {
 
-        ExFreePoolWithTag( ScannedExtensions, SCANNER_STRING_TAG );
+        ExFreePoolWithTag(ScannedExtensions, SCANNER_STRING_TAG);
     }
 
     ScannedExtensions = NULL;
@@ -703,9 +718,9 @@ Return Value:
 
 
 NTSTATUS
-ScannerAllocateUnicodeString (
+ScannerAllocateUnicodeString(
     _Inout_ PUNICODE_STRING String
-    )
+)
 /*++
 
 Routine Description:
@@ -727,9 +742,9 @@ Return Value:
 
     PAGED_CODE();
 
-    String->Buffer = ExAllocatePoolZero( NonPagedPool,
-                                         String->MaximumLength,
-                                         SCANNER_STRING_TAG );
+    String->Buffer = ExAllocatePoolZero(NonPagedPool,
+        String->MaximumLength,
+        SCANNER_STRING_TAG);
 
     if (String->Buffer == NULL) {
 
@@ -743,9 +758,9 @@ Return Value:
 
 
 VOID
-ScannerFreeUnicodeString (
+ScannerFreeUnicodeString(
     _Inout_ PUNICODE_STRING String
-    )
+)
 /*++
 
 Routine Description:
@@ -766,8 +781,8 @@ Return Value:
 
     if (String->Buffer) {
 
-        ExFreePoolWithTag( String->Buffer,
-                           SCANNER_STRING_TAG );
+        ExFreePoolWithTag(String->Buffer,
+            SCANNER_STRING_TAG);
         String->Buffer = NULL;
     }
 
@@ -777,13 +792,13 @@ Return Value:
 
 
 NTSTATUS
-ScannerPortConnect (
+ScannerPortConnect(
     _In_ PFLT_PORT ClientPort,
     _In_opt_ PVOID ServerPortCookie,
     _In_reads_bytes_opt_(SizeOfContext) PVOID ConnectionContext,
     _In_ ULONG SizeOfContext,
-    _Outptr_result_maybenull_ PVOID *ConnectionCookie
-    )
+    _Outptr_result_maybenull_ PVOID* ConnectionCookie
+)
 /*++
 
 Routine Description
@@ -814,13 +829,13 @@ Return Value
 {
     PAGED_CODE();
 
-    UNREFERENCED_PARAMETER( ServerPortCookie );
-    UNREFERENCED_PARAMETER( ConnectionContext );
-    UNREFERENCED_PARAMETER( SizeOfContext);
-    UNREFERENCED_PARAMETER( ConnectionCookie = NULL );
+    UNREFERENCED_PARAMETER(ServerPortCookie);
+    UNREFERENCED_PARAMETER(ConnectionContext);
+    UNREFERENCED_PARAMETER(SizeOfContext);
+    UNREFERENCED_PARAMETER(ConnectionCookie = NULL);
 
-    FLT_ASSERT( ScannerData.ClientPort == NULL );
-    FLT_ASSERT( ScannerData.UserProcess == NULL );
+    FLT_ASSERT(ScannerData.ClientPort == NULL);
+    FLT_ASSERT(ScannerData.UserProcess == NULL);
 
     //
     //  Set the user process and port. In a production filter it may
@@ -834,7 +849,7 @@ Return Value
     ScannerData.UserProcess = PsGetCurrentProcess();
     ScannerData.ClientPort = ClientPort;
 
-    DbgPrint( "!!! scanner.sys --- connected, port=0x%p\n", ClientPort );
+    DbgPrint("!!! scanner.sys --- connected, port=0x%p\n", ClientPort);
 
     return STATUS_SUCCESS;
 }
@@ -842,8 +857,8 @@ Return Value
 
 VOID
 ScannerPortDisconnect(
-     _In_opt_ PVOID ConnectionCookie
-     )
+    _In_opt_ PVOID ConnectionCookie
+)
 /*++
 
 Routine Description
@@ -861,18 +876,18 @@ Return value
 
 --*/
 {
-    UNREFERENCED_PARAMETER( ConnectionCookie );
+    UNREFERENCED_PARAMETER(ConnectionCookie);
 
     PAGED_CODE();
 
-    DbgPrint( "!!! scanner.sys --- disconnected, port=0x%p\n", ScannerData.ClientPort );
+    DbgPrint("!!! scanner.sys --- disconnected, port=0x%p\n", ScannerData.ClientPort);
 
     //
     //  Close our handle to the connection: note, since we limited max connections to 1,
     //  another connect will not be allowed until we return from the disconnect routine.
     //
 
-    FltCloseClientPort( ScannerData.Filter, &ScannerData.ClientPort );
+    FltCloseClientPort(ScannerData.Filter, &ScannerData.ClientPort);
 
     //
     //  Reset the user-process field.
@@ -883,9 +898,9 @@ Return value
 
 
 NTSTATUS
-ScannerUnload (
+ScannerUnload(
     _In_ FLT_FILTER_UNLOAD_FLAGS Flags
-    )
+)
 /*++
 
 Routine Description:
@@ -904,7 +919,7 @@ Return Value:
 
 --*/
 {
-    UNREFERENCED_PARAMETER( Flags );
+    UNREFERENCED_PARAMETER(Flags);
 
     ScannerFreeExtensions();
 
@@ -912,25 +927,25 @@ Return Value:
     //  Close the server port.
     //
 
-    FltCloseCommunicationPort( ScannerData.ServerPort );
+    FltCloseCommunicationPort(ScannerData.ServerPort);
 
     //
     //  Unregister the filter
     //
 
-    FltUnregisterFilter( ScannerData.Filter );
+    FltUnregisterFilter(ScannerData.Filter);
 
     return STATUS_SUCCESS;
 }
 
 
 NTSTATUS
-ScannerInstanceSetup (
+ScannerInstanceSetup(
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
     _In_ FLT_INSTANCE_SETUP_FLAGS Flags,
     _In_ DEVICE_TYPE VolumeDeviceType,
     _In_ FLT_FILESYSTEM_TYPE VolumeFilesystemType
-    )
+)
 /*++
 
 Routine Description:
@@ -958,13 +973,13 @@ Return Value:
 
 --*/
 {
-    UNREFERENCED_PARAMETER( FltObjects );
-    UNREFERENCED_PARAMETER( Flags );
-    UNREFERENCED_PARAMETER( VolumeFilesystemType );
+    UNREFERENCED_PARAMETER(FltObjects);
+    UNREFERENCED_PARAMETER(Flags);
+    UNREFERENCED_PARAMETER(VolumeFilesystemType);
 
     PAGED_CODE();
 
-    FLT_ASSERT( FltObjects->Filter == ScannerData.Filter );
+    FLT_ASSERT(FltObjects->Filter == ScannerData.Filter);
 
     //
     //  Don't attach to network volumes.
@@ -972,17 +987,17 @@ Return Value:
 
     if (VolumeDeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM) {
 
-       return STATUS_FLT_DO_NOT_ATTACH;
+        return STATUS_FLT_DO_NOT_ATTACH;
     }
 
     return STATUS_SUCCESS;
 }
 
 NTSTATUS
-ScannerQueryTeardown (
+ScannerQueryTeardown(
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
     _In_ FLT_INSTANCE_QUERY_TEARDOWN_FLAGS Flags
-    )
+)
 /*++
 
 Routine Description:
@@ -1005,19 +1020,19 @@ Return Value:
 
 --*/
 {
-    UNREFERENCED_PARAMETER( FltObjects );
-    UNREFERENCED_PARAMETER( Flags );
+    UNREFERENCED_PARAMETER(FltObjects);
+    UNREFERENCED_PARAMETER(Flags);
 
     return STATUS_SUCCESS;
 }
 
 
 FLT_PREOP_CALLBACK_STATUS
-ScannerPreCreate (
+ScannerPreCreate(
     _Inout_ PFLT_CALLBACK_DATA Data,
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
-    _Flt_CompletionContext_Outptr_ PVOID *CompletionContext
-    )
+    _Flt_CompletionContext_Outptr_ PVOID* CompletionContext
+)
 /*++
 
 Routine Description:
@@ -1048,8 +1063,8 @@ Return Value:
 
 --*/
 {
-    UNREFERENCED_PARAMETER( FltObjects );
-    UNREFERENCED_PARAMETER( CompletionContext = NULL );
+    UNREFERENCED_PARAMETER(FltObjects);
+    UNREFERENCED_PARAMETER(CompletionContext = NULL);
 
     PAGED_CODE();
 
@@ -1057,9 +1072,9 @@ Return Value:
     //  See if this create is being done by our user process.
     //
 
-    if (IoThreadToProcess( Data->Thread ) == ScannerData.UserProcess) {
+    if (IoThreadToProcess(Data->Thread) == ScannerData.UserProcess) {
 
-        DbgPrint( "!!! scanner.sys -- allowing create for trusted process \n" );
+        DbgPrint("!!! scanner.sys -- allowing create for trusted process \n");
 
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
@@ -1069,9 +1084,9 @@ Return Value:
 
 
 BOOLEAN
-ScannerpCheckExtension (
+ScannerpCheckExtension(
     _In_ PUNICODE_STRING Extension
-    )
+)
 /*++
 
 Routine Description:
@@ -1101,7 +1116,7 @@ Return Value
 
     for (count = 0; count < ScannedExtensionCount; count++) {
 
-        if (RtlCompareUnicodeString( Extension, ScannedExtensions + count, TRUE ) == 0) {
+        if (RtlCompareUnicodeString(Extension, ScannedExtensions + count, TRUE) == 0) {
 
             //
             //  A match. We are interested in this file
@@ -1116,12 +1131,12 @@ Return Value
 
 
 FLT_POSTOP_CALLBACK_STATUS
-ScannerPostCreate (
+ScannerPostCreate(
     _Inout_ PFLT_CALLBACK_DATA Data,
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
     _In_opt_ PVOID CompletionContext,
     _In_ FLT_POST_OPERATION_FLAGS Flags
-    )
+)
 /*++
 
 Routine Description:
@@ -1155,14 +1170,14 @@ Return Value:
     NTSTATUS status;
     BOOLEAN safeToOpen, scanFile;
 
-    UNREFERENCED_PARAMETER( CompletionContext );
-    UNREFERENCED_PARAMETER( Flags );
+    UNREFERENCED_PARAMETER(CompletionContext);
+    UNREFERENCED_PARAMETER(Flags);
 
     //
     //  If this create was failing anyway, don't bother scanning now.
     //
 
-    if (!NT_SUCCESS( Data->IoStatus.Status ) ||
+    if (!NT_SUCCESS(Data->IoStatus.Status) ||
         (STATUS_REPARSE == Data->IoStatus.Status)) {
 
         return FLT_POSTOP_FINISHED_PROCESSING;
@@ -1172,29 +1187,29 @@ Return Value:
     //  Check if we are interested in this file.
     //
 
-    status = FltGetFileNameInformation( Data,
-                                        FLT_FILE_NAME_NORMALIZED |
-                                            FLT_FILE_NAME_QUERY_DEFAULT,
-                                        &nameInfo );
+    status = FltGetFileNameInformation(Data,
+        FLT_FILE_NAME_NORMALIZED |
+        FLT_FILE_NAME_QUERY_DEFAULT,
+        &nameInfo);
 
-    if (!NT_SUCCESS( status )) {
+    if (!NT_SUCCESS(status)) {
 
         return FLT_POSTOP_FINISHED_PROCESSING;
     }
 
-    FltParseFileNameInformation( nameInfo );
+    FltParseFileNameInformation(nameInfo);
 
     //
     //  Check if the extension matches the list of extensions we are interested in
     //
 
-    scanFile = ScannerpCheckExtension( &nameInfo->Extension );
+    scanFile = ScannerpCheckExtension(&nameInfo->Extension);
 
     //
     //  Release file name info, we're done with it
     //
 
-    FltReleaseFileNameInformation( nameInfo );
+    FltReleaseFileNameInformation(nameInfo);
 
     if (!scanFile) {
 
@@ -1205,9 +1220,10 @@ Return Value:
         return FLT_POSTOP_FINISHED_PROCESSING;
     }
 
-    (VOID) ScannerpScanFileInUserMode( FltObjects->Instance,
-                                       FltObjects->FileObject,
-                                       &safeToOpen, READ);
+    (VOID)ScannerpCheckActionInUserMode(Data,
+        FltObjects->Instance,
+        FltObjects->FileObject,
+        READ, &safeToOpen);
 
     if (!safeToOpen) {
 
@@ -1215,18 +1231,19 @@ Return Value:
         //  Ask the filter manager to undo the create.
         //
 
-        DbgPrint( "!!! scanner.sys -- foul language detected in postcreate !!!\n" );
+        DbgPrint("!!! scanner.sys -- not allowed to open file in PostCreate !!!\n");
 
-        DbgPrint( "!!! scanner.sys -- undoing create \n" );
+        DbgPrint("!!! scanner.sys -- undoing CreateFile \n");
 
-        FltCancelFileOpen( FltObjects->Instance, FltObjects->FileObject );
+        FltCancelFileOpen(FltObjects->Instance, FltObjects->FileObject);
 
         Data->IoStatus.Status = STATUS_ACCESS_DENIED;
         Data->IoStatus.Information = 0;
 
         returnStatus = FLT_POSTOP_FINISHED_PROCESSING;
 
-    } else if (FltObjects->FileObject->WriteAccess) {
+    }
+    else if (FltObjects->FileObject->WriteAccess) {
 
         //
         //
@@ -1234,11 +1251,11 @@ Return Value:
         //  Allocate the context.
         //
 
-        status = FltAllocateContext( ScannerData.Filter,
-                                     FLT_STREAMHANDLE_CONTEXT,
-                                     sizeof(SCANNER_STREAM_HANDLE_CONTEXT),
-                                     PagedPool,
-                                     &scannerContext );
+        status = FltAllocateContext(ScannerData.Filter,
+            FLT_STREAMHANDLE_CONTEXT,
+            sizeof(SCANNER_STREAM_HANDLE_CONTEXT),
+            PagedPool,
+            &scannerContext);
 
         if (NT_SUCCESS(status)) {
 
@@ -1246,13 +1263,13 @@ Return Value:
             //  Set the handle context.
             //
 
-            scannerContext->RescanRequired = TRUE;
+            scannerContext->RecalculateHash = TRUE;
 
-            (VOID) FltSetStreamHandleContext( FltObjects->Instance,
-                                              FltObjects->FileObject,
-                                              FLT_SET_CONTEXT_REPLACE_IF_EXISTS,
-                                              scannerContext,
-                                              NULL );
+            (VOID)FltSetStreamHandleContext(FltObjects->Instance,
+                FltObjects->FileObject,
+                FLT_SET_CONTEXT_REPLACE_IF_EXISTS,
+                scannerContext,
+                NULL);
 
             //
             //  Normally we would check the results of FltSetStreamHandleContext
@@ -1267,7 +1284,7 @@ Return Value:
             //  Release our reference on the context (the set adds a reference)
             //
 
-            FltReleaseContext( scannerContext );
+            FltReleaseContext(scannerContext);
         }
     }
 
@@ -1276,11 +1293,11 @@ Return Value:
 
 
 FLT_PREOP_CALLBACK_STATUS
-ScannerPreCleanup (
+ScannerPreCleanup(
     _Inout_ PFLT_CALLBACK_DATA Data,
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
-    _Flt_CompletionContext_Outptr_ PVOID *CompletionContext
-    )
+    _Flt_CompletionContext_Outptr_ PVOID* CompletionContext
+)
 /*++
 
 Routine Description:
@@ -1306,30 +1323,23 @@ Return Value:
 {
     NTSTATUS status;
     PSCANNER_STREAM_HANDLE_CONTEXT context;
-    BOOLEAN safe;
 
-    UNREFERENCED_PARAMETER( Data );
-    UNREFERENCED_PARAMETER( CompletionContext );
+    UNREFERENCED_PARAMETER(CompletionContext);
 
-    status = FltGetStreamHandleContext( FltObjects->Instance,
-                                        FltObjects->FileObject,
-                                        &context );
+    status = FltGetStreamHandleContext(FltObjects->Instance,
+        FltObjects->FileObject,
+        &context);
 
-    if (NT_SUCCESS( status )) {
+    if (NT_SUCCESS(status)) {
 
-        if (context->RescanRequired) {
+        if (context->RecalculateHash) {
 
-            (VOID) ScannerpScanFileInUserMode( FltObjects->Instance,
-                                               FltObjects->FileObject,
-                                               &safe, WRITE);
-
-            if (!safe) {
-
-                DbgPrint( "!!! scanner.sys -- foul language detected in precleanup !!!\n" );
-            }
+            (VOID)ScannerpUpdateHashInUserMode(Data, 
+                FltObjects->Instance,
+                FltObjects->FileObject);
         }
 
-        FltReleaseContext( context );
+        FltReleaseContext(context);
     }
 
 
@@ -1356,187 +1366,196 @@ ScannerPreRead(
     _Flt_CompletionContext_Outptr_ PVOID* CompletionContext
 )
 {
-    PFLT_FILE_NAME_INFORMATION nameInfo;
+    FLT_PREOP_CALLBACK_STATUS returnStatus = FLT_PREOP_SUCCESS_NO_CALLBACK;
     NTSTATUS status;
-    BOOLEAN safeToOpen, scanFile;
+    PSCANNER_NOTIFICATION notification = NULL;
+    PSCANNER_STREAM_HANDLE_CONTEXT context = NULL;
+    ULONG replyLength;
+    BOOLEAN SafeToRead = TRUE;
+    PUCHAR buffer;
 
     UNREFERENCED_PARAMETER(CompletionContext);
 
     //
-    //  If this create was failing anyway, don't bother scanning now.
+    //  See if this read is being done by our user process.
     //
-
-    if (!NT_SUCCESS(Data->IoStatus.Status) || (STATUS_REPARSE == Data->IoStatus.Status))
-    {
+    if (IoThreadToProcess(Data->Thread) == ScannerData.UserProcess) {
+        DbgPrint("!!! scanner.sys -- allowing read for trusted process \n");
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
     //
-    //  Check if we are interested in this file.
+    //  If not client port just ignore this read.
     //
 
-    status = FltGetFileNameInformation(Data, FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_DEFAULT, &nameInfo);
-    if (!NT_SUCCESS(status))
-    {
-        return FLT_PREOP_SUCCESS_NO_CALLBACK;
-    }
-
-    FltParseFileNameInformation(nameInfo);
-
-    //
-    //  Check if the extension matches the list of extensions we are interested in
-    //
-
-    scanFile = ScannerpCheckExtension(&nameInfo->Extension);
-
-    //
-    //  Release file name info, we're done with it
-    //
-
-    FltReleaseFileNameInformation(nameInfo);
-
-    if (!scanFile)
-    {
-        //
-        //  Not an extension we are interested in
-        //
+    if (ScannerData.ClientPort == NULL) {
 
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
-    (VOID)ScannerpScanFileInUserMode(
-        FltObjects->Instance,
+    status = FltGetStreamHandleContext(FltObjects->Instance,
         FltObjects->FileObject,
-        &safeToOpen,
-        READ);
+        &context);
 
-    if (!safeToOpen)
-    {
+    if (!NT_SUCCESS(status)) {
+
         //
-        //  Ask the filter manager to undo the create.
+        //  We are not interested in this file.
         //
 
-        DbgPrint("!!! scanner.sys -- foul language detected in preread !!!\n");
-        Data->IoStatus.Status = STATUS_ACCESS_DENIED;
-        Data->IoStatus.Information = 0;
-        return FLT_PREOP_COMPLETE;
+        return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
-    return FLT_PREOP_SUCCESS_NO_CALLBACK;
+    try {
+
+        (VOID)ScannerpCheckActionInUserMode(Data,
+            FltObjects->Instance,
+            FltObjects->FileObject,
+            READ, &SafeToRead);
+
+        if (!SafeToRead) {
+
+            DbgPrint("!!! scanner.sys --  read isn't allowed !!!\n");
+
+            if (!FlagOn(Data->Iopb->IrpFlags, IRP_PAGING_IO)) {
+
+                DbgPrint("!!! scanner.sys -- blocking the read !!!\n");
+
+                Data->IoStatus.Status = STATUS_ACCESS_DENIED;
+                Data->IoStatus.Information = 0;
+                returnStatus = FLT_PREOP_COMPLETE;
+            }
+        }
+
+    }
+    finally {
+
+        if (context) {
+
+            FltReleaseContext(context);
+        }
+    }
+
+    return returnStatus;
 }
 
-/*++
-Routine Description:
-    Pre write callback.  We want to scan what's being written now.
-Arguments:
-    Data - The structure which describes the operation parameters.
-    FltObject - The structure which describes the objects affected by this
-        operation.
-    CompletionContext - Output parameter which can be used to pass a context
-        from this pre-write callback to the post-write callback.
-Return Value:
-    Always FLT_PREOP_SUCCESS_NO_CALLBACK.
---*/
 FLT_PREOP_CALLBACK_STATUS
 ScannerPreWrite(
     _Inout_ PFLT_CALLBACK_DATA Data,
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
     _Flt_CompletionContext_Outptr_ PVOID* CompletionContext
 )
+/*++
+
+Routine Description:
+
+    Pre write callback.  We want to scan what's being written now.
+
+Arguments:
+
+    Data - The structure which describes the operation parameters.
+
+    FltObject - The structure which describes the objects affected by this
+        operation.
+
+    CompletionContext - Output parameter which can be used to pass a context
+        from this pre-write callback to the post-write callback.
+
+Return Value:
+
+    Always FLT_PREOP_SUCCESS_NO_CALLBACK.
+
+--*/
 {
-    PFLT_FILE_NAME_INFORMATION nameInfo;
+    FLT_PREOP_CALLBACK_STATUS returnStatus = FLT_PREOP_SUCCESS_NO_CALLBACK;
     NTSTATUS status;
-    BOOLEAN safeToOpen, scanFile;
-    PSCANNER_STREAM_HANDLE_CONTEXT scannerContext;
+    PSCANNER_NOTIFICATION notification = NULL;
+    PSCANNER_STREAM_HANDLE_CONTEXT context = NULL;
+    ULONG replyLength;
+    BOOLEAN SafeToWrite = TRUE;
+    PUCHAR buffer;
 
     UNREFERENCED_PARAMETER(CompletionContext);
 
     //
-    //  If this create was failing anyway, don't bother scanning now.
+    //  See if this write is being done by our user process.
     //
-
-    if (!NT_SUCCESS(Data->IoStatus.Status) || (STATUS_REPARSE == Data->IoStatus.Status)) {
+    if (IoThreadToProcess(Data->Thread) == ScannerData.UserProcess) {
+        DbgPrint("!!! scanner.sys -- allowing write for trusted process \n");
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
     //
-    //  Check if we are interested in this file.
+    //  If not client port just ignore this write.
     //
 
-    status = FltGetFileNameInformation(Data, FLT_FILE_NAME_NORMALIZED | FLT_FILE_NAME_QUERY_DEFAULT, &nameInfo);
-    if (!NT_SUCCESS(status)) {
-        return FLT_PREOP_SUCCESS_NO_CALLBACK;
-    }
-
-    FltParseFileNameInformation(nameInfo);
-
-    //
-    //  Check if the extension matches the list of extensions we are interested in
-    //
-
-    scanFile = ScannerpCheckExtension(&nameInfo->Extension);
-
-    //
-    //  Release file name info, we're done with it
-    //
-
-    FltReleaseFileNameInformation(nameInfo);
-
-    if (!scanFile)
-    {
-        //
-        //  Not an extension we are interested in
-        //
+    if (ScannerData.ClientPort == NULL) {
 
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
-    // Optionally scan the write buffer here instead of file contents
-    (VOID)ScannerpScanFileInUserMode(
-        FltObjects->Instance,
+    status = FltGetStreamHandleContext(FltObjects->Instance,
         FltObjects->FileObject,
-        &safeToOpen,
-        WRITE);
+        &context);
 
-    if (!safeToOpen)
-    {
+    if (!NT_SUCCESS(status)) {
+
         //
-        //  Ask the filter manager to undo the create.
+        //  We are not interested in this file.
         //
 
-        DbgPrint("!!! scanner.sys -- foul language detected in prewrite !!!\n");
-        Data->IoStatus.Status = STATUS_ACCESS_DENIED;
-        Data->IoStatus.Information = 0;
-        return FLT_PREOP_COMPLETE;
+        return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
-    if (FltObjects->FileObject->WriteAccess)
-    {
-        //
-        //  The create has requested write access, mark to rescan the file.
-        //  Allocate the context.
-        //
+    try {
 
-        status = FltAllocateContext(ScannerData.Filter, FLT_STREAMHANDLE_CONTEXT, sizeof(SCANNER_STREAM_HANDLE_CONTEXT), PagedPool, &scannerContext);
-        if (NT_SUCCESS(status))
-        {
-            scannerContext->RescanRequired = TRUE;
-            (VOID)FltSetStreamHandleContext(FltObjects->Instance, FltObjects->FileObject, FLT_SET_CONTEXT_REPLACE_IF_EXISTS, scannerContext, NULL);
-            FltReleaseContext(scannerContext);
+        (VOID)ScannerpCheckActionInUserMode(Data,
+            FltObjects->Instance,
+            FltObjects->FileObject,
+            WRITE, &SafeToWrite);
+
+        if (!SafeToWrite) {
+
+            //
+            //  Block this write if not paging i/o (as a result of course, this scanner will not prevent memory mapped writes of contaminated
+            //  strings to the file, but only regular writes). The effect of getting ERROR_ACCESS_DENIED for many apps to delete the file they
+            //  are trying to write usually.
+            //  To handle memory mapped writes - we should be scanning at close time (which is when we can really establish that the file object
+            //  is not going to be used for any more writes)
+            //
+
+            DbgPrint("!!! scanner.sys --  write isn't allowed !!!\n");
+
+            if (!FlagOn(Data->Iopb->IrpFlags, IRP_PAGING_IO)) {
+
+                DbgPrint("!!! scanner.sys -- blocking the write !!!\n");
+
+                Data->IoStatus.Status = STATUS_ACCESS_DENIED;
+                Data->IoStatus.Information = 0;
+                returnStatus = FLT_PREOP_COMPLETE;
+            }
+        }
+
+    }
+    finally {
+
+        if (context) {
+
+            FltReleaseContext(context);
         }
     }
 
-    return FLT_PREOP_SUCCESS_NO_CALLBACK;
+    return returnStatus;
 }
 
 #if (WINVER>=0x0602)
 
 FLT_PREOP_CALLBACK_STATUS
-ScannerPreFileSystemControl (
+ScannerPreFileSystemControl(
     _Inout_ PFLT_CALLBACK_DATA Data,
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
-    _Flt_CompletionContext_Outptr_ PVOID *CompletionContext
-    )
+    _Flt_CompletionContext_Outptr_ PVOID* CompletionContext
+)
 /*++
 
 Routine Description:
@@ -1564,10 +1583,10 @@ Return Value:
     ULONG fsControlCode;
     PSCANNER_STREAM_HANDLE_CONTEXT context = NULL;
 
-    UNREFERENCED_PARAMETER( CompletionContext );
+    UNREFERENCED_PARAMETER(CompletionContext);
 
-    FLT_ASSERT( Data != NULL );
-    FLT_ASSERT( Data->Iopb != NULL );
+    FLT_ASSERT(Data != NULL);
+    FLT_ASSERT(Data->Iopb != NULL);
 
     //
     //  If not client port just ignore this write.
@@ -1578,11 +1597,11 @@ Return Value:
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
-    status = FltGetStreamHandleContext( FltObjects->Instance,
-                                        FltObjects->FileObject,
-                                        &context );
+    status = FltGetStreamHandleContext(FltObjects->Instance,
+        FltObjects->FileObject,
+        &context);
 
-    if (!NT_SUCCESS( status )) {
+    if (!NT_SUCCESS(status)) {
 
         //
         //  We are not interested in this file
@@ -1610,7 +1629,7 @@ Return Value:
             //  production-level behavior.
             //
 
-            DbgPrint( "!!! scanner.sys -- blocking the offload write !!!\n" );
+            DbgPrint("!!! scanner.sys -- blocking the offload write !!!\n");
 
             Data->IoStatus.Status = STATUS_ACCESS_DENIED;
             Data->IoStatus.Information = 0;
@@ -1618,11 +1637,12 @@ Return Value:
             returnStatus = FLT_PREOP_COMPLETE;
         }
 
-    } finally {
+    }
+    finally {
 
         if (context) {
 
-            FltReleaseContext( context );
+            FltReleaseContext(context);
         }
     }
 
@@ -1636,13 +1656,55 @@ Return Value:
 //
 /////////////////////////////////////////////////////////////////////////
 
+VOID
+ScannerGetFullFilePath(
+    _In_ PFLT_CALLBACK_DATA Data,
+    _Out_writes_(SCANNER_FILE_NAME_SIZE) char* FileName
+)
+{
+	NTSTATUS status = STATUS_SUCCESS;
+    PFLT_FILE_NAME_INFORMATION nameInfo;
+
+    status = FltGetFileNameInformation(Data,
+        FLT_FILE_NAME_NORMALIZED |
+        FLT_FILE_NAME_QUERY_DEFAULT,
+        &nameInfo);
+
+    if (!NT_SUCCESS(status)) {
+
+        return;
+    }
+
+    FltParseFileNameInformation(nameInfo);
+
+    const int maxWritableSize = SCANNER_FILE_NAME_SIZE - 1;
+
+    // Too long full filename path - takes only part of it.
+    // TODO: Adjust the size if needed - this won't really work in userspace(we need the full path to write to the file).
+    if (nameInfo->Name.Length > maxWritableSize)
+    {
+        RtlCopyMemory(FileName, nameInfo->Name.Buffer, maxWritableSize);
+    }
+    else
+    {
+        RtlCopyMemory(FileName, nameInfo->Name.Buffer, nameInfo->Name.Length);
+    }
+
+    //
+    //  Release file name info, we're done with it
+    //
+
+    FltReleaseFileNameInformation(nameInfo);
+}
+
 NTSTATUS
-ScannerpScanFileInUserMode (
+ScannerpCheckActionInUserMode(
+    _In_ PFLT_CALLBACK_DATA Data,
     _In_ PFLT_INSTANCE Instance,
     _In_ PFILE_OBJECT FileObject,
-    _Out_ PBOOLEAN SafeToOpen,
-	enum EFileAction action
-    )
+	_In_ enum EFileAction Action,
+    _Out_ PBOOLEAN SafeToOpen
+)
 /*++
 
 Routine Description:
@@ -1663,6 +1725,8 @@ Arguments:
 
     FileObject - File to be scanned.
 
+	Action - The action to be performed on the file.
+
     SafeToOpen - Set to FALSE if the file is scanned successfully and it contains
                  foul language.
 
@@ -1675,10 +1739,8 @@ Return Value:
 
 {
     NTSTATUS status = STATUS_SUCCESS;
-    PVOID magicBuffer = NULL;
-    PVOID fileIdBuffer = NULL;
+    PVOID filePathBuffer = NULL;
     ULONG bytesRead;
-    ULONG bytesReadSave;
     PSCANNER_NOTIFICATION notification = NULL;
     FLT_VOLUME_PROPERTIES volumeProps;
     LARGE_INTEGER offset;
@@ -1702,9 +1764,9 @@ Return Value:
         //  Obtain the volume object .
         //
 
-        status = FltGetVolumeFromInstance( Instance, &volume );
+        status = FltGetVolumeFromInstance(Instance, &volume);
 
-        if (!NT_SUCCESS( status )) {
+        if (!NT_SUCCESS(status)) {
 
             leave;
         }
@@ -1715,171 +1777,254 @@ Return Value:
         //  instance setup routine and setup an instance context where we can cache it.
         //
 
-        status = FltGetVolumeProperties( volume,
-                                         &volumeProps,
-                                         sizeof( volumeProps ),
-                                         &length );
+        status = FltGetVolumeProperties(volume,
+            &volumeProps,
+            sizeof(volumeProps),
+            &length);
+
         //
         //  STATUS_BUFFER_OVERFLOW can be returned - however we only need the properties, not the names
         //  hence we only check for error status.
         //
 
-        if (NT_ERROR( status )) {
+        if (NT_ERROR(status)) {
 
             leave;
         }
-
-        length = max( SCANNER_READ_BUFFER_SIZE, volumeProps.SectorSize );
 
         //
         //  Use non-buffered i/o, so allocate aligned pool
         //
 
-		magicBuffer = FltAllocatePoolAlignedWithTag(Instance,
-			                                        NonPagedPool,
-			                                        SCANNER_MAGIC_SIZE,
-			                                        'nacS');
+        filePathBuffer = FltAllocatePoolAlignedWithTag(Instance,
+            NonPagedPool,
+            SCANNER_FILE_NAME_SIZE,
+            'nacS');
 
-		fileIdBuffer = FltAllocatePoolAlignedWithTag(Instance,
-			NonPagedPool,
-			SCANNER_FILE_ID_SIZE,
-			'nacS');
-
-
-        if (NULL == magicBuffer || NULL == fileIdBuffer) {
+        if (NULL == filePathBuffer) {
 
             status = STATUS_INSUFFICIENT_RESOURCES;
             leave;
         }
 
-        notification = ExAllocatePoolZero( NonPagedPool,
-                                           sizeof( SCANNER_NOTIFICATION ),
-                                           'nacS' );
+        notification = ExAllocatePoolZero(NonPagedPool,
+            sizeof(SCANNER_NOTIFICATION),
+            'nacS');
 
-        if(NULL == notification) {
+        if (NULL == notification) {
 
             status = STATUS_INSUFFICIENT_RESOURCES;
             leave;
         }
 
-        //
-        //  Read the beginning of the file and pass the contents to user mode.
-        //
+        ScannerGetFullFilePath(Data, filePathBuffer);
 
-        offset.QuadPart = bytesRead = 0;
-        
-		// Read Magic Number from the file
-        status = FltReadFile(Instance,
-            FileObject,
-            &offset,
-            SCANNER_MAGIC_SIZE,
-            magicBuffer,
-            FLTFL_IO_OPERATION_NON_CACHED |
-            FLTFL_IO_OPERATION_DO_NOT_UPDATE_BYTE_OFFSET,
-            &bytesRead,
-            NULL,
-            NULL);
+        if (NT_SUCCESS(status)) {
 
-		// Check if the magic number is present
-        if (NT_SUCCESS(status) && bytesRead == SCANNER_MAGIC_SIZE) {
-			if (!RtlCompareMemory(SCANNER_MAGIC, magicBuffer, SCANNER_MAGIC_SIZE)) {
-				DbgPrint("!!! scanner.sys --- no magic number detected, ignored\n");
-				*SafeToOpen = TRUE;
-				leave;
-			}
-		}
-        // If the magic number is not present
-		else {
-			DbgPrint("!!! scanner.sys --- magic number not detected, ignored\n");
-			*SafeToOpen = TRUE;
-			leave;
-		}
+            //
+            //  Copy only as much as the buffer can hold
+            //
 
-		offset.QuadPart = bytesReadSave = bytesRead;
+            RtlCopyMemory(&notification->FilePath,
+                filePathBuffer,
+                SCANNER_FILE_NAME_SIZE);
 
-        // Read the fileID from the file.
-		status = FltReadFile(Instance,
-			FileObject,
-			&offset,
-			SCANNER_FILE_ID_SIZE,
-			fileIdBuffer,
-			FLTFL_IO_OPERATION_NON_CACHED |
-			FLTFL_IO_OPERATION_DO_NOT_UPDATE_BYTE_OFFSET,
-			&bytesRead,
-			NULL,
-			NULL);
+            notification->Action = (UCHAR)Action;
 
-		if (bytesRead != SCANNER_FILE_ID_SIZE) {
-			DbgPrint("!!! scanner.sys --- file id not detected, ignored\n");
-			*SafeToOpen = TRUE;
-			leave;
-		}
+            notification->BytesToScan = (ULONG)(SCANNER_FILE_NAME_SIZE + SCANNER_ACTION_SIZE);
 
-		bytesReadSave += bytesRead;
+            replyLength = sizeof(SCANNER_REPLY);
 
-		notification->Action = (CHAR)action;
-		bytesReadSave += sizeof(CHAR);
-
-        if (NT_SUCCESS( status ) && (0 != bytesReadSave)) {
-
-            notification->BytesToScan = (ULONG)bytesReadSave;
-
-            RtlCopyMemory(&notification->Magic,
-                magicBuffer,
-                SCANNER_MAGIC_SIZE);
-
-			RtlCopyMemory(&notification->FileId,
-				fileIdBuffer,
-				SCANNER_FILE_ID_SIZE);
-
-            replyLength = sizeof( SCANNER_REPLY );
-
-            status = FltSendMessage( ScannerData.Filter,
-                                     &ScannerData.ClientPort,
-                                     notification,
-                                     sizeof(SCANNER_NOTIFICATION),
-                                     notification,
-                                     &replyLength,
-                                     NULL );
+            status = FltSendMessage(ScannerData.Filter,
+                &ScannerData.ClientPort,
+                notification,
+                sizeof(SCANNER_NOTIFICATION),
+                notification,
+                &replyLength,
+                NULL);
 
             if (STATUS_SUCCESS == status) {
 
-                *SafeToOpen = ((PSCANNER_REPLY) notification)->SafeToOpen;
-
-            } else {
+                *SafeToOpen = ((PSCANNER_REPLY)notification)->AllowAction;
+            }
+            else {
 
                 //
                 //  Couldn't send message
                 //
 
-                DbgPrint( "!!! scanner.sys --- couldn't send message to user-mode to scan file, status 0x%X\n", status );
+                DbgPrint("!!! scanner.sys --- couldn't send message to user-mode, status 0x%X\n", status);
             }
         }
 
-    } finally {
+    }
+    finally {
 
-        if (NULL != magicBuffer) {
+        if (NULL != filePathBuffer) {
 
-            FltFreePoolAlignedWithTag( Instance, magicBuffer, 'nacS' );
-        }
-
-        if (NULL != fileIdBuffer) {
-
-            FltFreePoolAlignedWithTag(Instance, fileIdBuffer, 'nacS');
+            FltFreePoolAlignedWithTag(Instance, filePathBuffer, 'nacS');
         }
 
         if (NULL != notification) {
 
-            ExFreePoolWithTag( notification, 'nacS' );
+            ExFreePoolWithTag(notification, 'nacS');
         }
 
         if (NULL != volume) {
 
-            FltObjectDereference( volume );
+            FltObjectDereference(volume);
         }
     }
 
     return status;
 }
 
+NTSTATUS
+ScannerpUpdateHashInUserMode(
+    _In_ PFLT_CALLBACK_DATA Data,
+    _In_ PFLT_INSTANCE Instance,
+    _In_ PFILE_OBJECT FileObject
+)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    PVOID filePathBuffer = NULL;
+    ULONG bytesRead;
+    PSCANNER_NOTIFICATION notification = NULL;
+    FLT_VOLUME_PROPERTIES volumeProps;
+    LARGE_INTEGER offset;
+    ULONG replyLength, length;
+    PFLT_VOLUME volume = NULL;
+	BOOLEAN retVal = TRUE;
 
+    //
+    //  If not client port just return.
+    //
+
+    if (ScannerData.ClientPort == NULL) {
+
+        return STATUS_SUCCESS;
+    }
+
+    try {
+
+        //
+        //  Obtain the volume object .
+        //
+
+        status = FltGetVolumeFromInstance(Instance, &volume);
+
+        if (!NT_SUCCESS(status)) {
+
+            leave;
+        }
+
+        //
+        //  Determine sector size. Noncached I/O can only be done at sector size offsets, and in lengths which are
+        //  multiples of sector size. A more efficient way is to make this call once and remember the sector size in the
+        //  instance setup routine and setup an instance context where we can cache it.
+        //
+
+        status = FltGetVolumeProperties(volume,
+            &volumeProps,
+            sizeof(volumeProps),
+            &length);
+        
+        //
+        //  STATUS_BUFFER_OVERFLOW can be returned - however we only need the properties, not the names
+        //  hence we only check for error status.
+        //
+
+        if (NT_ERROR(status)) {
+
+            leave;
+        }
+
+        //
+        //  Use non-buffered i/o, so allocate aligned pool
+        //
+
+        filePathBuffer = FltAllocatePoolAlignedWithTag(Instance,
+            NonPagedPool,
+            SCANNER_FILE_NAME_SIZE,
+            'nacS');
+
+        if (NULL == filePathBuffer) {
+
+            status = STATUS_INSUFFICIENT_RESOURCES;
+            leave;
+        }
+
+        notification = ExAllocatePoolZero(NonPagedPool,
+            sizeof(SCANNER_NOTIFICATION),
+            'nacS');
+
+        if (NULL == notification) {
+
+            status = STATUS_INSUFFICIENT_RESOURCES;
+            leave;
+        }
+
+		ScannerGetFullFilePath(Data, filePathBuffer);
+
+        if (NT_SUCCESS(status)) {
+
+            //
+            //  Copy only as much as the buffer can hold
+            //
+
+            RtlCopyMemory(&notification->FilePath,
+                filePathBuffer,
+                SCANNER_FILE_NAME_SIZE);
+            
+            notification->Action = (UCHAR)UPDATE_HASH;
+
+            notification->BytesToScan = (ULONG)(SCANNER_FILE_NAME_SIZE + SCANNER_ACTION_SIZE);
+
+            replyLength = sizeof(SCANNER_REPLY);
+
+            status = FltSendMessage(ScannerData.Filter,
+                &ScannerData.ClientPort,
+                notification,
+                sizeof(SCANNER_NOTIFICATION),
+                notification,
+                &replyLength,
+                NULL);
+
+            if (STATUS_SUCCESS == status) {
+
+                retVal = ((PSCANNER_REPLY)notification)->AllowAction;
+                if (!retVal) {
+                    DbgPrint("!!! scanner.sys --- failed updaing hash for file %wZ !!!\n", filePathBuffer);
+                }
+            }
+            else {
+
+                //
+                //  Couldn't send message
+                //
+
+                DbgPrint("!!! scanner.sys --- couldn't send message to user-mode to update hash for file, status 0x%X\n", status);
+            }
+        }
+
+    }
+    finally {
+
+        if (NULL != filePathBuffer) {
+
+            FltFreePoolAlignedWithTag(Instance, filePathBuffer, 'nacS');
+        }
+
+        if (NULL != notification) {
+
+            ExFreePoolWithTag(notification, 'nacS');
+        }
+
+        if (NULL != volume) {
+
+            FltObjectDereference(volume);
+        }
+    }
+
+    return status;
+}

@@ -27,25 +27,22 @@ Environment:
 
 const PWSTR ScannerPortName = L"\\ScannerPort";
 
-#define SCANNER_MAGIC   "DTVL"
-#define SCANNER_MAGIC_SIZE 4
-#define SCANNER_FILE_ID_SIZE 36
 #define SCANNER_READ_BUFFER_SIZE   1024
+#define SCANNER_FILE_NAME_SIZE 512
+#define SCANNER_ACTION_SIZE 1
 
 typedef struct _SCANNER_NOTIFICATION {
 
     ULONG BytesToScan;
-    ULONG Reserved;                     // for quad-word alignement of the Contents structure
-	UCHAR Magic[SCANNER_MAGIC_SIZE];    // "DTVL"
-	UCHAR FileId[SCANNER_FILE_ID_SIZE]; // UUID
-    CHAR Action;                        // File action - read/write
-    UCHAR Contents[SCANNER_READ_BUFFER_SIZE];
+    ULONG Reserved;                           // for quad-word alignement of the Contents structure
+    UCHAR Action;                             // File action - read/write
+    UCHAR FilePath[SCANNER_FILE_NAME_SIZE];   // File full path
     
 } SCANNER_NOTIFICATION, *PSCANNER_NOTIFICATION;
 
 typedef struct _SCANNER_REPLY {
 
-    BOOLEAN SafeToOpen;
+    BOOLEAN AllowAction;
     
 } SCANNER_REPLY, *PSCANNER_REPLY;
 
