@@ -1665,6 +1665,9 @@ ScannerGetFullFilePath(
 	NTSTATUS status = STATUS_SUCCESS;
     PFLT_FILE_NAME_INFORMATION nameInfo;
 
+    // Initialize the output parameter to avoid returning uninitialized memory  
+    RtlZeroMemory(FileName, SCANNER_FILE_NAME_SIZE);
+
     status = FltGetFileNameInformation(Data,
         FLT_FILE_NAME_NORMALIZED |
         FLT_FILE_NAME_QUERY_DEFAULT,
@@ -1817,9 +1820,9 @@ Return Value:
             leave;
         }
 
-        ScannerGetFullFilePath(Data, filePathBuffer);
-
         if (NT_SUCCESS(status)) {
+
+            ScannerGetFullFilePath(Data, filePathBuffer);
 
             //
             //  Copy only as much as the buffer can hold
@@ -1964,9 +1967,9 @@ ScannerpUpdateHashInUserMode(
             leave;
         }
 
-		ScannerGetFullFilePath(Data, filePathBuffer);
-
         if (NT_SUCCESS(status)) {
+
+            ScannerGetFullFilePath(Data, filePathBuffer);
 
             //
             //  Copy only as much as the buffer can hold

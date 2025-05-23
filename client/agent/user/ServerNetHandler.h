@@ -32,6 +32,7 @@ Environment:
 #define DV_SERVER_PORT 8080
 
 #define ALLOW_ACCESS_CODE 200
+#define SUCCESS_CODE 200
 #define DENY_ACCESS_CODE 403
 
 BOOL
