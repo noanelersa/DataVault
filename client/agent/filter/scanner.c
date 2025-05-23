@@ -1,4 +1,4 @@
-/*++
+﻿/*++
 
 Copyright (c) 1999-2002  Microsoft Corporation
 
@@ -20,6 +20,8 @@ Environment:
 --*/
 
 #include <fltKernel.h>
+extern UCHAR* PsGetProcessImageFileName(PEPROCESS Process);
+
 #include <dontuse.h>
 #include <suppress.h>
 #include "scanuk.h"
@@ -122,7 +124,7 @@ ScannerpCheckActionInUserMode(
     _In_ PFLT_INSTANCE Instance,
     _In_ PFILE_OBJECT FileObject,
     _In_ enum EFileAction Action,
-    _Out_ PBOOLEAN SafeToOpen
+    _Out_ PUCHAR SafeToOpen
 );
 
 NTSTATUS
@@ -231,6 +233,72 @@ const FLT_REGISTRATION FilterRegistration = {
 //    Filter initialization and unload routines.
 //
 ////////////////////////////////////////////////////////////////////////////
+
+//BOOLEAN IsTrustedProcess(PETHREAD Thread)
+//{
+//    PEPROCESS process = IoThreadToProcess(Thread);
+//    const char* imageName = PsGetProcessImageFileName(process);
+//
+//    if (_stricmp(imageName, "explorer") == 0 ||
+//        _stricmp(imageName, "dllhost") == 0 ||
+//        _stricmp(imageName, "searchindexer") == 0 ||
+//        _stricmp(imageName, "searchprotocolhost") == 0 ||
+//        _stricmp(imageName, "searchfilterhost") == 0 ||
+//        _stricmp(imageName, "shellexperiencehost") == 0 ||
+//        _stricmp(imageName, "runtimebroker") == 0 ||
+//        _stricmp(imageName, "sihost") == 0 ||
+//        _stricmp(imageName, "backgroundtaskhost") == 0 ||
+//        _stricmp(imageName, "ctfmon") == 0 ||
+//        _stricmp(imageName, "smartscreen") == 0 ||
+//        _stricmp(imageName, "applicationframehost") == 0 ||
+//        _stricmp(imageName, "wmiprvse") == 0 ||
+//        _stricmp(imageName, "taskhostw") == 0 ||
+//        _stricmp(imageName, "vmtoolsd") == 0 ||
+//        _stricmp(imageName, "systemsettings") == 0) {
+//        return TRUE;
+//    }
+//
+//    return FALSE;
+//}
+
+#include <ntstrsafe.h>  // for RtlStringCchLengthA if you want to check length
+
+#define MAX_IMAGE_NAME_LEN 15
+
+BOOLEAN IsTrustedProcess(PETHREAD Thread)
+{
+    PEPROCESS process = IoThreadToProcess(Thread);
+    const char* imageName = PsGetProcessImageFileName(process);
+
+    if (imageName == NULL)
+        return FALSE;
+
+	const size_t imageNameLength = strnlen(imageName, MAX_IMAGE_NAME_LEN);
+
+    // Compare only the first 15 bytes of the name, case-insensitive
+    if (_strnicmp(imageName, "scanuser.exe", imageNameLength) == 0 ||
+        _strnicmp(imageName, "explorer.exe", imageNameLength) == 0 ||
+        _strnicmp(imageName, "dllhost.exe", imageNameLength) == 0 ||
+        _strnicmp(imageName, "searchindexer.exe", imageNameLength) == 0 ||
+        _strnicmp(imageName, "searchprotocolhost.exe", imageNameLength) == 0 ||
+        _strnicmp(imageName, "searchfilterhost.exe", imageNameLength) == 0 ||
+        _strnicmp(imageName, "shellexperiencehost.exe", imageNameLength) == 0 ||
+        _strnicmp(imageName, "runtimebroker.exe", imageNameLength) == 0 ||
+        _strnicmp(imageName, "sihost.exe", imageNameLength) == 0 ||
+        _strnicmp(imageName, "backgroundtaskhost.exe", imageNameLength) == 0 ||
+        _strnicmp(imageName, "ctfmon.exe", imageNameLength) == 0 ||
+        _strnicmp(imageName, "smartscreen.exe", imageNameLength) == 0 ||
+        _strnicmp(imageName, "applicationframehost.exe", imageNameLength) == 0 ||
+        _strnicmp(imageName, "wmiprvse.exe", imageNameLength) == 0 ||
+        _strnicmp(imageName, "taskhostw.exe", imageNameLength) == 0 ||
+        _strnicmp(imageName, "vmtoolsd.exe", imageNameLength) == 0 ||
+        _strnicmp(imageName, "systemsettings.exe", imageNameLength) == 0)
+    {
+        return TRUE;
+    }
+
+    return FALSE;
+}
 
 NTSTATUS
 DriverEntry(
@@ -1079,6 +1147,12 @@ Return Value:
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
     }
 
+    if (IsTrustedProcess(Data->Thread) ||
+        (FltObjects->FileObject->Flags & FO_STREAM_FILE) ||
+        (Data->Iopb->Parameters.Create.Options & FILE_DIRECTORY_FILE)) {
+        return FLT_PREOP_SUCCESS_NO_CALLBACK;
+    }
+
     return FLT_PREOP_SUCCESS_WITH_CALLBACK;
 }
 
@@ -1130,140 +1204,175 @@ Return Value
 }
 
 
-FLT_POSTOP_CALLBACK_STATUS
-ScannerPostCreate(
-    _Inout_ PFLT_CALLBACK_DATA Data,
-    _In_ PCFLT_RELATED_OBJECTS FltObjects,
-    _In_opt_ PVOID CompletionContext,
-    _In_ FLT_POST_OPERATION_FLAGS Flags
-)
-/*++
+FLT_POSTOP_CALLBACK_STATUS  
+ScannerPostCreate(  
+    _Inout_ PFLT_CALLBACK_DATA Data,  
+    _In_ PCFLT_RELATED_OBJECTS FltObjects,  
+    _In_opt_ PVOID CompletionContext,  
+    _In_ FLT_POST_OPERATION_FLAGS Flags  
+)  
+/*++  
 
-Routine Description:
+Routine Description:  
 
-    Post create callback.  We can't scan the file until after the create has
-    gone to the filesystem, since otherwise the filesystem wouldn't be ready
-    to read the file for us.
+    Post create callback.  We can't scan the file until after the create has  
+    gone to the filesystem, since otherwise the filesystem wouldn't be ready  
+    to read the file for us.  
 
-Arguments:
+Arguments:  
 
-    Data - The structure which describes the operation parameters.
+    Data - The structure which describes the operation parameters.  
 
-    FltObject - The structure which describes the objects affected by this
-        operation.
+    FltObject - The structure which describes the objects affected by this  
+        operation.  
 
-    CompletionContext - The operation context passed fron the pre-create
-        callback.
+    CompletionContext - The operation context passed from the pre-create  
+        callback.  
 
-    Flags - Flags to say why we are getting this post-operation callback.
+    Flags - Flags to say why we are getting this post-operation callback.  
 
-Return Value:
+Return Value:  
 
-    FLT_POSTOP_FINISHED_PROCESSING - ok to open the file or we wish to deny
-                                     access to this file, hence undo the open
+    FLT_POSTOP_FINISHED_PROCESSING - ok to open the file or we wish to deny  
+                                     access to this file, hence undo the open  
 
---*/
-{
-    PSCANNER_STREAM_HANDLE_CONTEXT scannerContext;
-    FLT_POSTOP_CALLBACK_STATUS returnStatus = FLT_POSTOP_FINISHED_PROCESSING;
-    PFLT_FILE_NAME_INFORMATION nameInfo;
-    NTSTATUS status;
-    BOOLEAN safeToOpen, scanFile;
+--*/  
+{  
+    PSCANNER_STREAM_HANDLE_CONTEXT scannerContext;  
+    FLT_POSTOP_CALLBACK_STATUS returnStatus = FLT_POSTOP_FINISHED_PROCESSING;  
+    PFLT_FILE_NAME_INFORMATION nameInfo;  
+    NTSTATUS status;  
+    BOOLEAN scanFile;
+    UCHAR isAllowed = 0;
 
-    UNREFERENCED_PARAMETER(CompletionContext);
-    UNREFERENCED_PARAMETER(Flags);
+    UNREFERENCED_PARAMETER(CompletionContext);  
+    UNREFERENCED_PARAMETER(Flags);  
 
-    //
-    //  If this create was failing anyway, don't bother scanning now.
-    //
+    //  
+    //  If this create was failing anyway, don't bother scanning now.  
+    //  
 
-    if (!NT_SUCCESS(Data->IoStatus.Status) ||
-        (STATUS_REPARSE == Data->IoStatus.Status)) {
+    if (!NT_SUCCESS(Data->IoStatus.Status) ||  
+        (STATUS_REPARSE == Data->IoStatus.Status)) {  
 
-        return FLT_POSTOP_FINISHED_PROCESSING;
+        return FLT_POSTOP_FINISHED_PROCESSING;  
     }
 
-    //
-    //  Check if we are interested in this file.
-    //
+    //  
+    //  Check if we are interested in this file.  
+    //  
 
-    status = FltGetFileNameInformation(Data,
-        FLT_FILE_NAME_NORMALIZED |
-        FLT_FILE_NAME_QUERY_DEFAULT,
-        &nameInfo);
+    status = FltGetFileNameInformation(Data,  
+        FLT_FILE_NAME_NORMALIZED |  
+        FLT_FILE_NAME_QUERY_DEFAULT,  
+        &nameInfo);  
 
-    if (!NT_SUCCESS(status)) {
+    if (!NT_SUCCESS(status)) {  
 
-        return FLT_POSTOP_FINISHED_PROCESSING;
+        return FLT_POSTOP_FINISHED_PROCESSING;  
+    }  
+
+    FltParseFileNameInformation(nameInfo);  
+
+    //  
+    //  Check if the extension matches the list of extensions we are interested in  
+    //  
+
+    UNICODE_STRING arr[11] = {RTL_CONSTANT_STRING(L"scanuser.exe"),
+                             RTL_CONSTANT_STRING(L"svchost.exe"),
+                             RTL_CONSTANT_STRING(L"SearchProtocolHost.exe"),
+                             RTL_CONSTANT_STRING(L"svchost.exe"),
+                             RTL_CONSTANT_STRING(L"SearchIndexer.exe"),
+                             RTL_CONSTANT_STRING(L"PresentationHost.exe"),
+                             RTL_CONSTANT_STRING(L"spoolsv.exe"),
+                             RTL_CONSTANT_STRING(L"SgrmBroker.exe"),
+                             RTL_CONSTANT_STRING(L"taskhostw.exe"),
+		                     RTL_CONSTANT_STRING(L"SearchFilterHost.exe") };
+
+    // Make sure we actually have a final component
+    if (nameInfo->FinalComponent.Length) {
+
+        for (int i = 0; i < 7; i++) {
+            if (RtlEqualUnicodeString(&nameInfo->FinalComponent, &arr[i], TRUE)) {
+                // If the file is one of the trusted executables, skip scanning
+                FltReleaseFileNameInformation(nameInfo);
+                return FLT_POSTOP_FINISHED_PROCESSING;
+            }
+		}
     }
-
-    FltParseFileNameInformation(nameInfo);
-
-    //
-    //  Check if the extension matches the list of extensions we are interested in
-    //
 
     scanFile = ScannerpCheckExtension(&nameInfo->Extension);
 
-    //
-    //  Release file name info, we're done with it
-    //
+    //  
+    //  Release file name info, we're done with it  
+    //  
 
-    FltReleaseFileNameInformation(nameInfo);
+    FltReleaseFileNameInformation(nameInfo);  
 
-    if (!scanFile) {
+    if (!scanFile) {  
 
-        //
-        //  Not an extension we are interested in
-        //
+        //  
+        //  Not an extension we are interested in  
+        //  
 
+        return FLT_POSTOP_FINISHED_PROCESSING;  
+    }  
+
+    (VOID)ScannerpCheckActionInUserMode(Data,  
+        FltObjects->Instance,  
+        FltObjects->FileObject,  
+        READ, &isAllowed);
+
+    if (isAllowed == NOT_REGISTERED) {
         return FLT_POSTOP_FINISHED_PROCESSING;
     }
+    else if (isAllowed == NOT_ALLOWED) {
 
-    (VOID)ScannerpCheckActionInUserMode(Data,
-        FltObjects->Instance,
-        FltObjects->FileObject,
-        READ, &safeToOpen);
+        //  
+        //  Ask the filter manager to undo the create.  
+        //  
 
-    if (!safeToOpen) {
+        DbgPrint("!!! scanner.sys -- not allowed to open file in PostCreate !!!\n");  
 
-        //
-        //  Ask the filter manager to undo the create.
-        //
+        DbgPrint("!!! scanner.sys -- undoing CreateFile \n");  
 
-        DbgPrint("!!! scanner.sys -- not allowed to open file in PostCreate !!!\n");
+        FltCancelFileOpen(FltObjects->Instance, FltObjects->FileObject);  
 
-        DbgPrint("!!! scanner.sys -- undoing CreateFile \n");
+        Data->IoStatus.Status = STATUS_ACCESS_DENIED;  
+        Data->IoStatus.Information = 0;  
 
-        FltCancelFileOpen(FltObjects->Instance, FltObjects->FileObject);
+        return FLT_POSTOP_FINISHED_PROCESSING;  
+    }  
+     else if (FltObjects->FileObject->WriteAccess) {  
 
-        Data->IoStatus.Status = STATUS_ACCESS_DENIED;
-        Data->IoStatus.Information = 0;
+        //  
+        //  
+        //  The create has requested write access, mark to rescan the file.  
+        //  Allocate the context.  
+        //  
 
-        returnStatus = FLT_POSTOP_FINISHED_PROCESSING;
-
-    }
-    else if (FltObjects->FileObject->WriteAccess) {
-
-        //
-        //
-        //  The create has requested write access, mark to rescan the file.
-        //  Allocate the context.
-        //
-
-        status = FltAllocateContext(ScannerData.Filter,
-            FLT_STREAMHANDLE_CONTEXT,
-            sizeof(SCANNER_STREAM_HANDLE_CONTEXT),
-            PagedPool,
-            &scannerContext);
+        status = FltAllocateContext(ScannerData.Filter,  
+            FLT_STREAMHANDLE_CONTEXT,  
+            sizeof(SCANNER_STREAM_HANDLE_CONTEXT),  
+            PagedPool,  
+            &scannerContext);  
 
         if (NT_SUCCESS(status)) {
 
-            //
-            //  Set the handle context.
-            //
+            //  
+            //  Set the handle context.  
+            //  
 
             scannerContext->RecalculateHash = TRUE;
+
+            //  
+            //  Normally we would check the results of FltSetStreamHandleContext  
+            //  for a variety of error cases. However, The only error status  
+            //  that could be returned, in this case, would tell us that  
+            //  contexts are not supported.  Even if we got this error,  
+            //  we just want to release the context now and that will free  
+            //  this memory if it was not successfully set.  
+            // 
 
             (VOID)FltSetStreamHandleContext(FltObjects->Instance,
                 FltObjects->FileObject,
@@ -1271,24 +1380,15 @@ Return Value:
                 scannerContext,
                 NULL);
 
-            //
-            //  Normally we would check the results of FltSetStreamHandleContext
-            //  for a variety of error cases. However, The only error status
-            //  that could be returned, in this case, would tell us that
-            //  contexts are not supported.  Even if we got this error,
-            //  we just want to release the context now and that will free
-            //  this memory if it was not successfully set.
-            //
-
-            //
-            //  Release our reference on the context (the set adds a reference)
-            //
+            //  
+            //  Release our reference on the context (the set adds a reference)  
+            //  
 
             FltReleaseContext(scannerContext);
         }
-    }
+     }  
 
-    return returnStatus;
+    return returnStatus;  
 }
 
 
@@ -1325,6 +1425,11 @@ Return Value:
     PSCANNER_STREAM_HANDLE_CONTEXT context;
 
     UNREFERENCED_PARAMETER(CompletionContext);
+
+    if (IoThreadToProcess(Data->Thread) == ScannerData.UserProcess) {
+        DbgPrint("!!! scanner.sys -- allowing clenaup for trusted process \n");
+        return FLT_PREOP_SUCCESS_NO_CALLBACK;
+    }
 
     status = FltGetStreamHandleContext(FltObjects->Instance,
         FltObjects->FileObject,
@@ -1371,8 +1476,7 @@ ScannerPreRead(
     PSCANNER_NOTIFICATION notification = NULL;
     PSCANNER_STREAM_HANDLE_CONTEXT context = NULL;
     ULONG replyLength;
-    BOOLEAN SafeToRead = TRUE;
-    PUCHAR buffer;
+    UCHAR safeToRead = 0;
 
     UNREFERENCED_PARAMETER(CompletionContext);
 
@@ -1411,9 +1515,9 @@ ScannerPreRead(
         (VOID)ScannerpCheckActionInUserMode(Data,
             FltObjects->Instance,
             FltObjects->FileObject,
-            READ, &SafeToRead);
+            READ, &safeToRead);
 
-        if (!SafeToRead) {
+        if (safeToRead == NOT_ALLOWED) {
 
             DbgPrint("!!! scanner.sys --  read isn't allowed !!!\n");
 
@@ -1472,8 +1576,7 @@ Return Value:
     PSCANNER_NOTIFICATION notification = NULL;
     PSCANNER_STREAM_HANDLE_CONTEXT context = NULL;
     ULONG replyLength;
-    BOOLEAN SafeToWrite = TRUE;
-    PUCHAR buffer;
+    UCHAR safeToWrite = TRUE;
 
     UNREFERENCED_PARAMETER(CompletionContext);
 
@@ -1512,9 +1615,9 @@ Return Value:
         (VOID)ScannerpCheckActionInUserMode(Data,
             FltObjects->Instance,
             FltObjects->FileObject,
-            WRITE, &SafeToWrite);
+            WRITE, &safeToWrite);
 
-        if (!SafeToWrite) {
+        if (safeToWrite == NOT_ALLOWED) {
 
             //
             //  Block this write if not paging i/o (as a result of course, this scanner will not prevent memory mapped writes of contaminated
@@ -1665,6 +1768,9 @@ ScannerGetFullFilePath(
 	NTSTATUS status = STATUS_SUCCESS;
     PFLT_FILE_NAME_INFORMATION nameInfo;
 
+    // Initialize the output parameter to avoid returning uninitialized memory  
+    RtlZeroMemory(FileName, SCANNER_FILE_NAME_SIZE);
+
     status = FltGetFileNameInformation(Data,
         FLT_FILE_NAME_NORMALIZED |
         FLT_FILE_NAME_QUERY_DEFAULT,
@@ -1703,7 +1809,7 @@ ScannerpCheckActionInUserMode(
     _In_ PFLT_INSTANCE Instance,
     _In_ PFILE_OBJECT FileObject,
 	_In_ enum EFileAction Action,
-    _Out_ PBOOLEAN SafeToOpen
+    _Out_ PUCHAR IsAllowed
 )
 /*++
 
@@ -1747,7 +1853,7 @@ Return Value:
     ULONG replyLength, length;
     PFLT_VOLUME volume = NULL;
 
-    *SafeToOpen = TRUE;
+    *IsAllowed = NOT_REGISTERED;
 
     //
     //  If not client port just return.
@@ -1792,20 +1898,7 @@ Return Value:
             leave;
         }
 
-        //
-        //  Use non-buffered i/o, so allocate aligned pool
-        //
-
-        filePathBuffer = FltAllocatePoolAlignedWithTag(Instance,
-            NonPagedPool,
-            SCANNER_FILE_NAME_SIZE,
-            'nacS');
-
-        if (NULL == filePathBuffer) {
-
-            status = STATUS_INSUFFICIENT_RESOURCES;
-            leave;
-        }
+        length = max(SCANNER_READ_BUFFER_SIZE, volumeProps.SectorSize);
 
         notification = ExAllocatePoolZero(NonPagedPool,
             sizeof(SCANNER_NOTIFICATION),
@@ -1817,53 +1910,37 @@ Return Value:
             leave;
         }
 
-        ScannerGetFullFilePath(Data, filePathBuffer);
+        ScannerGetFullFilePath(Data, &notification->FilePath);
 
-        if (NT_SUCCESS(status)) {
+        notification->Action = (UCHAR)Action;
+
+        notification->BytesToScan = (ULONG)(SCANNER_FILE_NAME_SIZE + SCANNER_ACTION_SIZE);
+
+        replyLength = sizeof(SCANNER_REPLY);
+
+        status = FltSendMessage(ScannerData.Filter,
+            &ScannerData.ClientPort,
+            notification,
+            sizeof(SCANNER_NOTIFICATION),
+            notification,
+            &replyLength,
+            NULL);
+
+        if (STATUS_SUCCESS == status) {
+
+            *IsAllowed = ((PSCANNER_REPLY)notification)->AllowAction;
+        }
+        else {
 
             //
-            //  Copy only as much as the buffer can hold
+            //  Couldn't send message
             //
 
-            RtlCopyMemory(&notification->FilePath,
-                filePathBuffer,
-                SCANNER_FILE_NAME_SIZE);
-
-            notification->Action = (UCHAR)Action;
-
-            notification->BytesToScan = (ULONG)(SCANNER_FILE_NAME_SIZE + SCANNER_ACTION_SIZE);
-
-            replyLength = sizeof(SCANNER_REPLY);
-
-            status = FltSendMessage(ScannerData.Filter,
-                &ScannerData.ClientPort,
-                notification,
-                sizeof(SCANNER_NOTIFICATION),
-                notification,
-                &replyLength,
-                NULL);
-
-            if (STATUS_SUCCESS == status) {
-
-                *SafeToOpen = ((PSCANNER_REPLY)notification)->AllowAction;
-            }
-            else {
-
-                //
-                //  Couldn't send message
-                //
-
-                DbgPrint("!!! scanner.sys --- couldn't send message to user-mode, status 0x%X\n", status);
-            }
+            DbgPrint("!!! scanner.sys --- couldn't send message to user-mode, status 0x%X\n", status);
         }
 
     }
     finally {
-
-        if (NULL != filePathBuffer) {
-
-            FltFreePoolAlignedWithTag(Instance, filePathBuffer, 'nacS');
-        }
 
         if (NULL != notification) {
 
@@ -1939,21 +2016,6 @@ ScannerpUpdateHashInUserMode(
             leave;
         }
 
-        //
-        //  Use non-buffered i/o, so allocate aligned pool
-        //
-
-        filePathBuffer = FltAllocatePoolAlignedWithTag(Instance,
-            NonPagedPool,
-            SCANNER_FILE_NAME_SIZE,
-            'nacS');
-
-        if (NULL == filePathBuffer) {
-
-            status = STATUS_INSUFFICIENT_RESOURCES;
-            leave;
-        }
-
         notification = ExAllocatePoolZero(NonPagedPool,
             sizeof(SCANNER_NOTIFICATION),
             'nacS');
@@ -1964,56 +2026,41 @@ ScannerpUpdateHashInUserMode(
             leave;
         }
 
-		ScannerGetFullFilePath(Data, filePathBuffer);
+        ScannerGetFullFilePath(Data, &notification->FilePath);
 
-        if (NT_SUCCESS(status)) {
+        notification->Action = (UCHAR)UPDATE_HASH;
 
-            //
-            //  Copy only as much as the buffer can hold
-            //
+        notification->BytesToScan = (ULONG)(SCANNER_FILE_NAME_SIZE + SCANNER_ACTION_SIZE);
 
-            RtlCopyMemory(&notification->FilePath,
-                filePathBuffer,
-                SCANNER_FILE_NAME_SIZE);
-            
-            notification->Action = (UCHAR)UPDATE_HASH;
+        replyLength = sizeof(SCANNER_REPLY);
 
-            notification->BytesToScan = (ULONG)(SCANNER_FILE_NAME_SIZE + SCANNER_ACTION_SIZE);
+        status = FltSendMessage(ScannerData.Filter,
+            &ScannerData.ClientPort,
+            notification,
+            sizeof(SCANNER_NOTIFICATION),
+            notification,
+            &replyLength,
+            NULL);
 
-            replyLength = sizeof(SCANNER_REPLY);
+        if (STATUS_SUCCESS == status) {
 
-            status = FltSendMessage(ScannerData.Filter,
-                &ScannerData.ClientPort,
-                notification,
-                sizeof(SCANNER_NOTIFICATION),
-                notification,
-                &replyLength,
-                NULL);
-
-            if (STATUS_SUCCESS == status) {
-
-                retVal = ((PSCANNER_REPLY)notification)->AllowAction;
-                if (!retVal) {
-                    DbgPrint("!!! scanner.sys --- failed updaing hash for file %wZ !!!\n", filePathBuffer);
-                }
-            }
-            else {
-
-                //
-                //  Couldn't send message
-                //
-
-                DbgPrint("!!! scanner.sys --- couldn't send message to user-mode to update hash for file, status 0x%X\n", status);
+            retVal = ((PSCANNER_REPLY)notification)->AllowAction;
+            if (retVal == NOT_ALLOWED) {
+                DbgPrint("!!! scanner.sys --- failed updaing hash for file %wZ !!!\n", filePathBuffer);
             }
         }
+        else {
+
+            //
+            //  Couldn't send message
+            //
+
+            DbgPrint("!!! scanner.sys --- couldn't send message to user-mode to update hash for file, status 0x%X\n", status);
+        }
+        // 
 
     }
     finally {
-
-        if (NULL != filePathBuffer) {
-
-            FltFreePoolAlignedWithTag(Instance, filePathBuffer, 'nacS');
-        }
 
         if (NULL != notification) {
 

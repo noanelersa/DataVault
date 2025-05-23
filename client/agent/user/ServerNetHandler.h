@@ -27,11 +27,22 @@ Environment:
 #define DV_AGENT_NAME "DataVaultAgent"
 
 // TODO: Should be replaced with dynamic server ip (as CLI parameter)
-#define DV_SERVER_IP "192.168.71.1"
+#define DV_SERVER_IP "10.10.248.113"
 
 #define DV_SERVER_PORT 8080
 
+enum EServerResponse
+{
+    SUCESS = 200,
+    FAILURE = 403,
+    NOT_EXIST = 404,
+    ALREADY_EXIST = 409,
+
+    NUM_SERVER_RESPONSES
+} typedef EServerResponse;
+
 #define ALLOW_ACCESS_CODE 200
+#define SUCCESS_CODE 200
 #define DENY_ACCESS_CODE 403
 
 BOOL

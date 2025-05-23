@@ -1,7 +1,7 @@
 #include "UINetHandler.h"
 #include "ServerNetHandler.h"
 #include "Utils.h"
-#include <time.h>
+#include "DriverHandler.h"
 
 BOOL InitializeServer(SOCKET* listenSocket)
 {
@@ -171,39 +171,40 @@ BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username
 {
     HINTERNET hSession = NULL, hConnect = NULL, hRequest = NULL;
 
-    // JSON request body
-    char jsonData[MAX_JSON_SIZE*2] = { 0 };
+    // JSON request body.
+    char jsonData[MAX_JSON_DATA_SIZE] = { 0 };
 
-    // At the moment we don't support file hash functionality in the server.
-    // Therefore, we use the current time as the file hash for now - in Fnv1a format.
-	char timeBuffer[TIME_BUFFER_SIZE] = { 0 };
-	char fileHash[FNV_HASH_STR_LEN] = { 0 };
+    char* protectedFilePath = GetPathFromUI(recvbuf);
 
-    time_t timeNow = time(NULL);
-    struct tm* timeSt = localtime(&timeNow);
-    strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", timeSt);
-	Fnv1aHashString(timeBuffer, fileHash);
-
-	// TODO: Get the ACL from the UI.
-    // Follow the API format - USE recvbuf and recvbuflen.
+    uint8_t fileHash[HASH_SIZE * 2 + 1] = { 0 };
+    if (ComputeFileSha256Hex(protectedFilePath, fileHash) != 0)
+    {
+        printf("HandleUIFileRegister: Failed computing the file hash for file path %s\n", protectedFilePath);
+        
+        // Free the allocated memory.
+        free(protectedFilePath);
+        return FALSE;
+    }
 
     char* jsonAclString = ParseAccessControl(recvbuf);
 
     // Format JSON payload.
     snprintf(jsonData, sizeof(jsonData),
-        "{ \"owner\": \"%s\", \"fileHash\": \"%s\", \"fileName\":\"secret.txt\",\"acl\": %s }",
-        username, fileHash, jsonAclString);
+        "{ \"owner\": \"%s\", \"fileName\": \"%s\", \"fileHash\":\"%.64s\",\"acl\":\%s\ }",
+        username, protectedFilePath, fileHash, jsonAclString);
 
-    // Free the allocated memory.
-    free(jsonAclString);
+    printf("\n\n\n%s\n\n\n", jsonData);
 
-    // Open HTTP connection
+    // Open HTTP connection.
     if (!OpenHttpConnection(&hSession, &hConnect))
     {
+        // Free the allocated memory.
+        free(protectedFilePath);
+        free(jsonAclString);
         return FALSE;
     }
 
-    // Open HTTP request (POST)
+    // Open HTTP request (POST).
     hRequest = HttpOpenRequestA(hConnect, "POST", "/file", NULL, NULL, NULL,
         INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 0);
     if (!hRequest) 
@@ -211,22 +212,30 @@ BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username
         printf("Error: HttpOpenRequestA failed with %d\n", GetLastError());
         InternetCloseHandle(hConnect);
         InternetCloseHandle(hSession);
+
+        // Free the allocated memory.
+        free(protectedFilePath);
+        free(jsonAclString);
         return FALSE;
     }
 
-    char headers[512] = { 0 };
+    char headers[MAX_JSON_HEADERS_SIZE] = { 0 };
     snprintf(headers, sizeof(headers),
         "Host: %s:%d\r\nContent-Type: application/json\r\nAccept: */*\r\n",
         DV_SERVER_IP, DV_SERVER_PORT);
 
-    const DWORD headersLen = (DWORD)strlen(headers);
-    const DWORD jsonLen = (DWORD)strlen(jsonData);
+    const DWORD headersLen = (DWORD)strnlen(headers, MAX_JSON_HEADERS_SIZE);
+    const DWORD jsonLen = (DWORD)strnlen(jsonData, MAX_JSON_DATA_SIZE);
 
-    // Send HTTP request with JSON data
+    // Send HTTP request with JSON data.
     if (!HttpSendRequestA(hRequest, headers, headersLen, jsonData, jsonLen))
     {
         printf("Error: HttpSendRequestA failed with %drr\n", GetLastError());
         CloseAllHandlers(&hRequest, &hConnect, &hSession);
+
+        // Free the allocated memory.
+        free(protectedFilePath);
+        free(jsonAclString);
         return FALSE;
     }
 
@@ -237,49 +246,49 @@ BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username
     if (!HttpQueryInfoA(hRequest, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &statusCode, &statusCodeSize, NULL))
     {
         printf("HttpQueryInfoA failed with error for file registeration: %d\n", GetLastError());
+        CloseAllHandlers(&hRequest, &hConnect, &hSession);
+
+        // Free the allocated memory.
+        free(protectedFilePath);
+        free(jsonAclString);
         return FALSE;
     }
 
     printf("Server responded with HTTP status code for file registeration: %d\n", statusCode);
 
-	// Check if the file was registered successfully.
-	// TODO: Deal with the case where the file was not registered becaue it already exists.
-    if (statusCode != ALLOW_ACCESS_CODE)
-    {
-        return FALSE;
-    }
-
-    // Read the response.
-    // TODO: Change to uuid size (fileId size).
-    char serverResponse[AGENT_FILE_ID_SIZE + 1] = { 0 };
-    DWORD bytesRead = 0;
-
-	// TODO: Remove if not needed.
-    // For reading in chunks.
-    // while (InternetReadFile(hRequest, serverResponse, sizeof(serverResponse), &bytesRead) && bytesRead > 0)
-
-    if (!InternetReadFile(hRequest, serverResponse, sizeof(serverResponse) - 1, &bytesRead))
-    {
-        printf("Error: InternetReadFile failed with %d in file registeration\n", GetLastError());
-    }
-
-	char magicFileIDCombined[AGENT_MAGIC_SIZE + AGENT_FILE_ID_SIZE] = { 0 };
-
-	// Combine the magic number and file ID.
-	strncpy(magicFileIDCombined, AGENT_MAGIC, AGENT_MAGIC_SIZE);
-	strncpy(magicFileIDCombined + AGENT_MAGIC_SIZE, serverResponse, AGENT_FILE_ID_SIZE);
-
-    char* protectedFilePath = GetPathFromUI(recvbuf);
-
-	// Prepend the magic number and file ID to the file.
-    PrependToFile(protectedFilePath, magicFileIDCombined, sizeof(magicFileIDCombined));
-
-    // Free the allocated memory.
-	free(protectedFilePath);
-
     // Cleanup
     CloseAllHandlers(&hRequest, &hConnect, &hSession);
 
+    // Check if the file was registered successfully.
+    // TODO: Deal with the case where the file was not registered becaue it already exists.
+    if (statusCode != SUCESS)
+    {
+        if (statusCode == ALREADY_EXIST)
+        {
+            printf("HandleUIFileRegister: File already registered in the server\n");
+        }
+        else if (statusCode == FAILURE)
+        {
+            printf("HandleUIFileRegister: File cannot be registered by the current user - not an owner\n");
+        }
+
+        // Free the allocated memory.
+        free(protectedFilePath);
+        free(jsonAclString);
+		return FALSE;
+    }
+
+    // Reduce one backslash from the file path - \\ -> \.
+    ReduceBackslashes(protectedFilePath);
+
+	// Save the file hash in the map.
+    MapEntryValue entry;
+	entry.fileHash = strdup(fileHash);
+    MapSet(protectedFilePath, &entry);
+
+    // Free the allocated memory.
+    free(protectedFilePath);
+    free(jsonAclString);
     return TRUE;
 }
 

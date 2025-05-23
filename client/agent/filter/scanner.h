@@ -37,6 +37,14 @@ enum EFileAction {
     NUM_FILE_ACTIONS
 };
 
+enum EAgentResponse {
+    NOT_ALLOWED = 0,
+    ALLOWED,
+    NOT_REGISTERED,
+
+	NUM_AGENT_RESPONSES
+};
+
 typedef struct _SCANNER_DATA {
 
     //

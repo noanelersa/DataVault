@@ -30,9 +30,10 @@ Environment:
 #include "scanuser.h"
 #include <dontuse.h>
 
+#include "Utils.h"
 #include "ServerNetHandler.h"
 #include "UINetHandler.h"
-#include "Utils.h"
+#include "DriverHandler.h"
 
 //
 //  Default and Maximum number of threads.
@@ -41,9 +42,6 @@ Environment:
 #define SCANNER_DEFAULT_REQUEST_COUNT       5
 #define SCANNER_DEFAULT_THREAD_COUNT        2
 #define SCANNER_MAX_THREAD_COUNT            64
-
-// TODO: Remove later.
-UCHAR FoulString[] = "DataVaultIsBad";
 
 //
 //  Context passed to worker threads
@@ -78,31 +76,29 @@ Return Value
 
 --*/
 {
-
-    printf( "Connects to the scanner filter and scans buffers \n" );
     printf( "Usage: scanuser [requests per thread] [number of threads(1-64)]\n" );
 }
 
 // Function to send JSON data to the server
-BOOL ScanBufferWithServer(const char* username, const char* fileID, const char action)
+EAgentResponse CheckUserActionWithServer(const char* username, const char* fileHash, const unsigned char action)
 {
     HINTERNET hSession = NULL, hConnect = NULL, hRequest = NULL;
 
-    // JSON request body
-    char jsonData[512] = { 0 };
+    // JSON request body.
+    char jsonData[MAX_JSON_DATA_SIZE] = { 0 };
 
     // Format JSON payload.
     snprintf(jsonData, sizeof(jsonData),
-        "{ \"user\": \"%s\", \"action\": \"0\", \"fileID\": \"%.36s\" }",
-        username, fileID);
+        "{ \"user\": \"%s\", \"action\": \"%c\", \"fileHash\": \"%.64s\" }",
+        username, (action+'0'), fileHash);
 
-    // Open HTTP connection
+    // Open HTTP connection.
     if (!OpenHttpConnection(&hSession, &hConnect))
     {
         return FALSE;
     } 
 
-    // Open HTTP request (POST)
+    // Open HTTP request (POST).
     hRequest = HttpOpenRequestA(hConnect, "POST", "/events", NULL, NULL, NULL,
         INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 0);
     if (!hRequest) {
@@ -112,15 +108,15 @@ BOOL ScanBufferWithServer(const char* username, const char* fileID, const char a
         return FALSE;
     }
 
-    char headers[512] = { 0 };
+    char headers[MAX_JSON_HEADERS_SIZE] = { 0 };
     snprintf(headers, sizeof(headers),
         "Host: %s:%d\r\nContent-Type: application/json\r\nAccept: */*\r\n",
         DV_SERVER_IP, DV_SERVER_PORT);
 
-	const DWORD headersLen = (DWORD)strlen(headers);
-    const DWORD jsonLen = (DWORD)strlen(jsonData);
+	const DWORD headersLen = (DWORD)strnlen(headers, MAX_JSON_HEADERS_SIZE);
+    const DWORD jsonLen = (DWORD)strnlen(jsonData, MAX_JSON_DATA_SIZE);
 
-    // Send HTTP request with JSON data
+    // Send HTTP request with JSON data.
     if (!HttpSendRequestA(hRequest, headers, headersLen, jsonData, jsonLen))
     {
         printf("Error: HttpSendRequestA failed with %drr\n", GetLastError());
@@ -132,71 +128,95 @@ BOOL ScanBufferWithServer(const char* username, const char* fileID, const char a
 	DWORD statusCodeSize = sizeof(statusCode);
 
     // Get the HTTP status code.
-    if (HttpQueryInfoA(hRequest, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &statusCode, &statusCodeSize, NULL))
+    if (!HttpQueryInfoA(hRequest, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &statusCode, &statusCodeSize, NULL))
     {
         printf("Server responded with HTTP status code: %d\n", statusCode);
     }
-    else
-    {
-        printf("HttpQueryInfoA failed with error: %d\n", GetLastError());
-    }
 
-    // Cleanup
+	// Cleanup hr handles.
 	CloseAllHandlers(&hRequest, &hConnect, &hSession);
 
-    // If true, allow access to file.
-    return (statusCode == ALLOW_ACCESS_CODE);
-}
-
-BOOL
-ScanBuffer (
-    _In_reads_bytes_(BufferSize) PUCHAR Buffer,
-    _In_ ULONG BufferSize
-    )
-/*++
-
-Routine Description
-
-    Scans the supplied buffer for an instance of FoulString.
-
-    Note: Pattern matching algorithm used here is just for illustration purposes,
-    there are many better algorithms available for real world filters
-
-Arguments
-
-    Buffer      -   Pointer to buffer
-    BufferSize  -   Size of passed in buffer
-
-Return Value
-
-    TRUE        -    Found an occurrence of the appropriate FoulString
-    FALSE       -    Buffer is ok
-
---*/
-{
-    PUCHAR p;
-    ULONG searchStringLength = sizeof(FoulString) - sizeof(UCHAR);
-
-    for (p = Buffer;
-         p <= (Buffer + BufferSize - searchStringLength);
-         p++) {
-
-        if (RtlEqualMemory( p, FoulString, searchStringLength )) {
-
-            printf( "Found a string\n" );
-
-            //
-            //  Once we find our search string, we're not interested in seeing
-            //  whether it appears again.
-            //
-
-            return TRUE;
-        }
+    EAgentResponse res = NOT_REGISTERED;
+    if (statusCode == SUCESS)
+    {
+        res = ALLOWED;
+    }
+    else if (statusCode == FAILURE)
+    {
+        res = NOT_ALLOWED;
     }
 
-    return FALSE;
+    return res;
 }
 
+EAgentResponse UpdateFileHashWithServer(const char* username, const char* oldFileHash, const char* newFileHash)
+{
+    HINTERNET hSession = NULL, hConnect = NULL, hRequest = NULL;
+
+    // JSON request body.
+    char jsonData[MAX_JSON_DATA_SIZE] = { 0 };
+
+    // Format JSON payload.
+    snprintf(jsonData, sizeof(jsonData),
+        "{ \"username\": \"%s\", \"originalHash\": \"%.64s\", \"newHash\": \"%.64s\" }",
+        username, oldFileHash, newFileHash);
+
+    // Open HTTP connection.
+    if (!OpenHttpConnection(&hSession, &hConnect))
+    {
+        return FALSE;
+    }
+
+    // Open HTTP request (POST).
+    hRequest = HttpOpenRequestA(hConnect, "PUT", "/file", NULL, NULL, NULL,
+        INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 0);
+    if (!hRequest) {
+        printf("Error: HttpOpenRequestA failed with %d\n", GetLastError());
+        InternetCloseHandle(hConnect);
+        InternetCloseHandle(hSession);
+        return FALSE;
+    }
+
+    char headers[MAX_JSON_HEADERS_SIZE] = { 0 };
+    snprintf(headers, sizeof(headers),
+        "Host: %s:%d\r\nContent-Type: application/json\r\nAccept: */*\r\n",
+        DV_SERVER_IP, DV_SERVER_PORT);
+
+    const DWORD headersLen = (DWORD)strnlen(headers, MAX_JSON_HEADERS_SIZE);
+    const DWORD jsonLen = (DWORD)strnlen(jsonData, MAX_JSON_DATA_SIZE);
+
+    // Send HTTP request with JSON data.
+    if (!HttpSendRequestA(hRequest, headers, headersLen, jsonData, jsonLen))
+    {
+        printf("Error: HttpSendRequestA failed with %drr\n", GetLastError());
+        CloseAllHandlers(&hRequest, &hConnect, &hSession);
+        return FALSE;
+    }
+
+    DWORD statusCode = 0;
+    DWORD statusCodeSize = sizeof(statusCode);
+
+    // Get the HTTP status code.
+    if (!HttpQueryInfoA(hRequest, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &statusCode, &statusCodeSize, NULL))
+    {
+        printf("Server responded with HTTP status code: %d\n", statusCode);
+    }
+
+    // Cleanup hr handles.
+    CloseAllHandlers(&hRequest, &hConnect, &hSession);
+
+    EAgentResponse res = NOT_REGISTERED;
+    if (statusCode == SUCESS)
+    {
+        res = ALLOWED;
+    }
+    else if (statusCode == FAILURE)
+    {
+        res = NOT_ALLOWED;
+    }
+
+    return res;
+}
 
 DWORD
 ScannerWorker(
@@ -224,7 +244,7 @@ Return Value
     SCANNER_REPLY_MESSAGE replyMessage;
     PSCANNER_MESSAGE message;
     LPOVERLAPPED pOvlp;
-    BOOL result;
+    UCHAR result;
     DWORD outSize;
     HRESULT hr;
     ULONG_PTR key;
@@ -239,7 +259,6 @@ Return Value
         //
         //  Poll for messages from the filter component to scan.
         //
-
         result = GetQueuedCompletionStatus( Context->Completion, &outSize, &key, &pOvlp, INFINITE );
 
         //
@@ -251,33 +270,114 @@ Return Value
 
         message = CONTAINING_RECORD( pOvlp, SCANNER_MESSAGE, Ovlp );
 
-        if (!result) {
+        if (result == 0) {
 
             //
             //  An error occured.
             //
-
             hr = HRESULT_FROM_WIN32( GetLastError() );
             break;
         }
 
-        printf( "Received message, size %Id\n", pOvlp->InternalHigh );
+        // printf("Received message, size %Id\n", pOvlp->InternalHigh);
 
         notification = &message->Notification;
 
-        assert(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
-        _Analysis_assume_(notification->BytesToScan <= SCANNER_READ_BUFFER_SIZE);
+        const char* ntPath = Utf16ToUtf8(notification->FilePath);
 
-		result = ScanBufferWithServer(Context->username, &notification->FileId, &notification->Action);
-        printf("Magic is : %.4s\n", notification->Magic);
-        printf("FileId is : %.36s\n", notification->FileId);
-        printf("Action is : %X\n", notification->Action);
+		// TODO: Make it dynamic - we usually us C:\<path> format, but it can change.
+        char filePath[AGENT_FILE_NAME_SIZE] = { 0 };
+		filePath[0] = 'C'; // Ensure the first character is 'C'.
+		filePath[1] = ':'; // Ensure the second character is ':'
+
+        // Copy the NT path after "C:"
+        strcpy(filePath + 2, ntPath + 23);
+
+        const unsigned char requestedAction = notification->Action;
+
+        uint8_t currentFileHash[HASH_SIZE * 2 + 1] = { 0 };
+
+        if (requestedAction == READ || requestedAction == WRITE)
+        {
+            if (MapGet(filePath) != NULL)
+            {
+                memcpy(currentFileHash, MapGet(filePath)->fileHash, HASH_SIZE * 2);
+            }
+            else
+            {
+                if (ComputeFileSha256Hex(filePath, currentFileHash) != 0) {
+                    printf("ScannerWorker: Failed computing the file hash for file path %s\n", filePath);
+                    break;
+                }
+            }
+
+            result = CheckUserActionWithServer(Context->username, currentFileHash, requestedAction);
+
+            if (result == ALLOWED)
+            {
+                printf("ScannerWorker: Allowed action %d for file %s\n", requestedAction, filePath);
+                
+                // File hashed allowed, but the file path isn't present in the map,
+				// meanining the file was copied or moved(not in the original registered path).
+                // TODO: In the future, deal with it - now just add the new path to the map - you
+                // will need to search by value and find the same hash and then erase the old key(filePath).
+                if (MapGet(filePath) == NULL)
+                {
+                    MapEntryValue entry;
+                    entry.fileHash = strdup(currentFileHash);
+                    MapSet(filePath, &entry);
+				}
+            }
+            else if (result == NOT_ALLOWED)
+            {
+                printf("ScannerWorker: NOT Allowed action %d for file %s\n", requestedAction, filePath);
+            }
+        }
+        else if (requestedAction == UPDATE_HASH)
+        {
+			MapEntryValue* entryValue = MapGet(filePath);
+            if (entryValue != NULL)
+            {
+                if (ComputeFileSha256Hex(filePath, currentFileHash) != 0) {
+                    printf("ScannerWorker: Failed computing the file hash for file path %s\n", filePath);
+                    break;
+                }
+
+                // printf("ScannerWorker: old file hash %.32s and new one %.32s\n", entryValue->fileHash, currentFileHash);
+
+                result = UpdateFileHashWithServer(Context->username, entryValue->fileHash, currentFileHash);
+                if (result == ALLOWED)
+                {
+                    MapEntryValue entry;
+                    entry.fileHash = strdup(currentFileHash);
+
+                    // Update the file hash in the map.
+                    MapSet(filePath, &entry);
+                }
+            }
+            else
+            {
+                printf("ScannerWorker: cleanup for unregistered file in path %s\n", filePath);
+                result = NOT_REGISTERED;
+            }
+        }
+        else
+        {
+			// Unknown action requested.
+            printf("ScannerWorker: Unknown action requested %d\n", requestedAction);
+            result = NOT_ALLOWED;
+        }
+
+		// Free the allocated memory for the NT path once done using it.
+        free(ntPath);
+
         replyMessage.ReplyHeader.Status = 0;
         replyMessage.ReplyHeader.MessageId = message->MessageHeader.MessageId;
 
-        replyMessage.Reply.SafeToOpen = result;
-
-        printf( "Replying message, SafeToOpen: %d\n", replyMessage.Reply.SafeToOpen );
+        replyMessage.Reply.AllowAction = result;
+        
+        if (requestedAction == UPDATE_HASH)
+            printf("Replying message, SafeToOpen: %d\n", replyMessage.Reply.AllowAction);
 
         hr = FilterReplyMessage( Context->Port,
                                  (PFILTER_REPLY_HEADER) &replyMessage,
@@ -285,7 +385,7 @@ Return Value
 
         if (SUCCEEDED( hr )) {
 
-            printf( "Replied message\n" );
+            // printf( "Replied message\n" );
 
         } else {
 
@@ -508,7 +608,7 @@ main (
     
 main_cleanup:
 
-    WaitForSingleObject(serverThread, INFINITE);
+    // WaitForSingleObject(serverThread, INFINITE);
 
     for (INT i = 0; threads[i] != NULL; ++i) {
         WaitForSingleObjectEx(threads[i], INFINITE, FALSE);
@@ -523,6 +623,8 @@ main_cleanup:
     CloseHandle( completion );
 
     free(messages);
+
+    MapCleanup();
 
     return hr;
 }
