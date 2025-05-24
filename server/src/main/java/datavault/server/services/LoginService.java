@@ -24,12 +24,10 @@ public class LoginService {
             contextSource.setUserDn(userDn);
             contextSource.setPassword(loginDTO.password());
             contextSource.afterPropertiesSet();
-            log.info("Cool - good job");
             // Try to get context — this will throw if invalid
             contextSource.getContext(userDn, loginDTO.password());
             return true;
         } catch (Exception e) {
-            log.error("fuck");
             System.out.println("Authentication failed: " + e.getMessage());
             return false;
         }

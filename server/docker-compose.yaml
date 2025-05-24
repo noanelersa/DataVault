@@ -1,6 +1,6 @@
 services:
   server:
-    image: jerichowalls/server:2.0.3
+    image: jerichowalls/server:3.0.0
     container_name: datavault-server
     ports:
       - "8080:8080"
