@@ -23,6 +23,9 @@ public class FilesService {
     private HashService hashService;
 
     @Autowired
+    private HashService hashService;
+
+    @Autowired
     private UsersService usersService;
 
     @Autowired
