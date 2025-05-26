@@ -197,6 +197,17 @@ BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username
     }
 
     char* jsonAclString = ParseAccessControl(recvbuf);
+    
+    printf("recvbuf: %.*s\n", recvbuflen, recvbuf);
+
+    char* token = GetTokenFromUI(recvbuf);             
+    if (!token) {
+        printf("Error: failed to extract token.\n");   
+        free(jsonAclString);                          
+        return FALSE;                                
+    }
+
+    printf("The extracted token: %s\n",token);
 
     // Format JSON payload.
     snprintf(jsonData, sizeof(jsonData),
@@ -209,6 +220,7 @@ BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username
         // Free the allocated memory.
         free(protectedFilePath);
         free(jsonAclString);
+        free(token); 
         return FALSE;
     }
 
@@ -217,6 +229,7 @@ BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username
         INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 0);
     if (!hRequest) 
     {
+        free(token); 
         printf("Error: HttpOpenRequestA failed with %d\n", GetLastError());
         InternetCloseHandle(hConnect);
         InternetCloseHandle(hSession);
@@ -229,13 +242,19 @@ BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username
 
     char headers[MAX_JSON_HEADERS_SIZE] = { 0 };
     snprintf(headers, sizeof(headers),
-        "Host: %s:%d\r\nContent-Type: application/json\r\nAccept: */*\r\n",
-        DV_SERVER_IP, DV_SERVER_PORT);
+    "Host: %s:%d\r\n"
+    "Content-Type: application/json\r\n"
+    "Accept: */*\r\n"
+    "Authorization: Bearer %s\r\n",
+    DV_SERVER_IP, DV_SERVER_PORT, token);
+
 
     const DWORD headersLen = (DWORD)strnlen(headers, MAX_JSON_HEADERS_SIZE);
     const DWORD jsonLen = (DWORD)strnlen(jsonData, MAX_JSON_DATA_SIZE);
 
-    // Send HTTP request with JSON data.
+    free(token);
+
+    // Send HTTP request with JSON data
     if (!HttpSendRequestA(hRequest, headers, headersLen, jsonData, jsonLen))
     {
         printf("Error: HttpSendRequestA failed with %drr\n", GetLastError());
@@ -524,7 +543,7 @@ BOOLEAN HandleUILogin(char* recvbuf, int recvbuflen, char* token, int tokenSize)
         return FALSE;
     }
 
-    HINTERNET hConnect = InternetConnectA(hInternet, "10.10.241.106", 8080, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
+    HINTERNET hConnect = InternetConnectA(hInternet, DV_SERVER_IP, 8080, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
     if (!hConnect) {
         printf("InternetConnect failed\n");
         InternetCloseHandle(hInternet);
