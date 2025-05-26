@@ -1,11 +1,11 @@
 import socket
-from flask import Flask, request
+from flask import Flask, request, make_response,jsonify
 from flask_cors import CORS
 from enum import Enum
-
+from functools import wraps
 app = Flask(__name__)
 
-CORS(app)
+CORS(app, supports_credentials=True)
 
 BASE_PATH = "C:\\Users\\alice\\Documents\\DT\\"
 
@@ -40,12 +40,25 @@ def serialize_acl(acl_list):
 
 
 
+def require_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.cookies.get('auth_token')
+        if not token:
+            return jsonify({"status": "fail", "error": "Missing or invalid auth token"}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+
 @app.route("/register", methods=["POST"])
+@require_auth
 def register():
     newFile = request.json
     register_data = serialize_acl(newFile['sharedWith'])
+    token = request.cookies.get("auth_token")
 
     try:
+        register_data = AgentActionType.REGISTER_FILE.value.to_bytes(1, byteorder='big') + f"{BASE_PATH}{newFile['name']}$token={token}$".encode() + serialize_acl(newFile['sharedWith']).encode() + b"$"
         send_to_agent(register_data)
         return {"status": "success"}
     except Exception as e:
@@ -55,6 +68,7 @@ def register():
 
 
 @app.route("/update-permissions", methods=["POST"])
+@require_auth
 def update_permissions():
     file_data = request.json
 
@@ -69,6 +83,7 @@ def update_permissions():
 
 
 @app.route("/delete/<file_name>" , methods=["DELETE"])
+@require_auth
 def delete_file(file_name):
     try:
         delete_data = AgentActionType.DELETE_FILE.value.to_bytes(1,byteorder='big') + f"{BASE_PATH}{file_name}$".encode()
@@ -99,7 +114,16 @@ def login():
 
 
         if response[0] == 1:
-            return {"status": "success"}, 200
+            token = response[1:].decode(errors="ignore")  
+            print("Login successful. Message from agent:", token)
+
+            resp = make_response({
+                "status": "success",
+                "message": "Login successful"
+            })
+            resp.set_cookie("auth_token", token, httponly=True, secure=False, samesite='Lax')
+
+            return resp, 200
         else:
             return {"status": "fail", "error": "Invalid credentials"}, 401
 
