@@ -71,6 +71,7 @@ const FileManagementSystem = () => {
         headers: {
           'Content-Type': 'application/json', // Set content type to JSON
         },
+        credentials: 'include',
         body: JSON.stringify(newFile), // Convert the data to JSON string
       })
         .then((response) => response.json()) // Parse the JSON response
@@ -227,6 +228,7 @@ const FileManagementSystem = () => {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: 'include',
         body: JSON.stringify({
           name: fileForPermissionEdit.name,
           sharedWith: finalSharedWith.map(user => ({
@@ -450,6 +452,7 @@ const FileManagementSystem = () => {
     try {
       const response = await fetch(`http://localhost:2513/delete/${fileName}`, {
         method: 'DELETE',
+        credentials: 'include',
       });
   
       if (response.ok) {
