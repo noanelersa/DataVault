@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useTypingEffect } from './components/ui/useTypingEffect';
-import { useNavigate } from 'react-router-dom';
 import Navbar from './components/navbar'; 
 
 interface LoginPageProps {
@@ -12,30 +11,33 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const navigate = useNavigate();
-
   const subtitle = useTypingEffect('Secure and track your sensitive files.', 25);
 
-  const existingUsers = [
-    { username: 'roys', password: 'roys' },
-    { username: 'talc', password: 'talc' },
-    { username: 'maorg', password: 'maorg' },
-    { username: 'alicem', password: 'alicem' },
-    { username: 'taliam', password: 'taliam' },
-    { username: 'noan', password: 'noan' },
-  ];
-
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const matchedUser = existingUsers.find(
-      (user) => user.username === username && user.password === password
-    );
+    setError('');
 
-    if (matchedUser) {
-      localStorage.setItem('userId', username);
-      onLogin(username);
-    } else {
-      setError('Invalid username or password');
+    try {
+      const response = await fetch('http://localhost:2513/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ username, password }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.status === 'success') {
+        localStorage.setItem('userId', username);
+        onLogin(username);
+      } else {
+        setError('Invalid username or password');
+      }
+    } catch (err) {
+      console.error('Login failed:', err);
+      setError('Server error. Please try again later.');
     }
   };
   
