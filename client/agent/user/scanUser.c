@@ -279,8 +279,6 @@ Return Value
             break;
         }
 
-        // printf("Received message, size %Id\n", pOvlp->InternalHigh);
-
         notification = &message->Notification;
 
         const char* ntPath = Utf16ToUtf8(notification->FilePath);
@@ -357,7 +355,7 @@ Return Value
             }
             else
             {
-                printf("ScannerWorker: cleanup for unregistered file in path %s\n", filePath);
+                printf("ScannerWorker: update hash for unregistered file in path %s\n", filePath);
                 result = NOT_REGISTERED;
             }
         }
@@ -375,19 +373,12 @@ Return Value
         replyMessage.ReplyHeader.MessageId = message->MessageHeader.MessageId;
 
         replyMessage.Reply.AllowAction = result;
-        
-        if (requestedAction == UPDATE_HASH)
-            printf("Replying message, SafeToOpen: %d\n", replyMessage.Reply.AllowAction);
 
         hr = FilterReplyMessage( Context->Port,
                                  (PFILTER_REPLY_HEADER) &replyMessage,
                                  sizeof( replyMessage ) );
 
-        if (SUCCEEDED( hr )) {
-
-            // printf( "Replied message\n" );
-
-        } else {
+        if (!SUCCEEDED(hr)) {
 
             printf( "Scanner: Error replying message. Error = 0x%X\n", hr );
             break;
@@ -608,7 +599,7 @@ main (
     
 main_cleanup:
 
-    // WaitForSingleObject(serverThread, INFINITE);
+    WaitForSingleObject(serverThread, INFINITE);
 
     for (INT i = 0; threads[i] != NULL; ++i) {
         WaitForSingleObjectEx(threads[i], INFINITE, FALSE);

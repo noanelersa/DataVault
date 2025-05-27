@@ -193,8 +193,6 @@ BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username
         "{ \"owner\": \"%s\", \"fileName\": \"%s\", \"fileHash\":\"%.64s\",\"acl\":\%s\ }",
         username, protectedFilePath, fileHash, jsonAclString);
 
-    printf("\n\n\n%s\n\n\n", jsonData);
-
     // Open HTTP connection.
     if (!OpenHttpConnection(&hSession, &hConnect))
     {

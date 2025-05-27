@@ -78,7 +78,7 @@ typedef struct _SCANNER_DATA {
 
     PFLT_PORT ClientPort;
 
-} SCANNER_DATA, * PSCANNER_DATA;
+} SCANNER_DATA, *PSCANNER_DATA;
 
 extern SCANNER_DATA ScannerData;
 

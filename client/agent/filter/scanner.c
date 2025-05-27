@@ -1292,7 +1292,7 @@ Return Value:
     // Make sure we actually have a final component
     if (nameInfo->FinalComponent.Length) {
 
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 11; i++) {
             if (RtlEqualUnicodeString(&nameInfo->FinalComponent, &arr[i], TRUE)) {
                 // If the file is one of the trusted executables, skip scanning
                 FltReleaseFileNameInformation(nameInfo);

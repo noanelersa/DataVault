@@ -37,6 +37,7 @@ enum EServerResponse
     FAILURE = 403,
     NOT_EXIST = 404,
     ALREADY_EXIST = 409,
+	ITERNEL_ERROR = 500,
 
     NUM_SERVER_RESPONSES
 } typedef EServerResponse;
