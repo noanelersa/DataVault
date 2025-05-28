@@ -7,10 +7,10 @@ import axios from 'axios';
 // const socket = io("localhost:2512"); // Connect to the server
 
 const FileManagementSystem = () => {
-  const [page, setPage] = useState('files');
+  const [page, setPage] = useState("files");
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [responseMessage, setResponseMessage] = useState('');
+  const [responseMessage, setResponseMessage] = useState("");
   const fileInputRef = useRef(null);
 
   const [showPermissionModal, setShowPermissionModal] = useState(false); //modal for editing permissions
@@ -57,14 +57,13 @@ const FileManagementSystem = () => {
   }, []);
   
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const files = e.target.files;
-    if (files && files.length > 0) {
-      const file = files[0];
-      console.info(`File uploaded: ${file.name}`);
-
-      const newFile = {
-        id: files.length + 1,
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    console.info(`File uploaded: ${file.name}`);
+    try {
+      const command = {
         name: file.name,
         uploadedBy: '7075ed12', // assuming current user is admin
         uploadDate: new Date().toISOString().slice(0, 16).replace('T', ' '),
@@ -77,29 +76,40 @@ const FileManagementSystem = () => {
           { user: '7075ed12', action: 'uploaded', date: new Date().toISOString().slice(0, 16).replace('T', ' ') }
         ]
       };
-
-      fetch('http://localhost:2513/register', {
-        method: 'POST', // Specify the HTTP method (POST in this case)
-        headers: {
-          'Content-Type': 'application/json', // Set content type to JSON
-        },
-        credentials: 'include',
-        body: JSON.stringify(newFile), // Convert the data to JSON string
-      })
-        .then((response) => response.json()) // Parse the JSON response
-        .then((data) => {
-          setResponseMessage('Data sent successfully!');
-          console.log('Response:', data); // Log the response data from the server
-        })
-        .catch((error) => {
-          console.error('Error:', error);
-          setResponseMessage('Error sending data');
-        });
-
+  
+      console.log("Sending upload command to agent:", command);
+  
+      const result = await window.agentAPI.sendCommand("upload", command);
+  
+      console.log("Agent response:", result);
+      
+      if (result?.status === "success") {
+        const newFile = {
+          id: files.length + 1,
+          name: file.name,
+          uploadedBy: '7075ed12', // assuming current user is admin
+          uploadDate: new Date().toISOString().slice(0, 16).replace('T', ' '),
+          lastAccessed: new Date().toISOString().slice(0, 10),
+          accessCount: 0,
+          size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+          type: file.type || 'Unknown',
+          sharedWith: [{ id: 1, name: 'user1', access: 'read' },{ id: 2, name: 'user2', access: 'read' }],
+          accessHistory: [
+            { user: '7075ed12', action: 'uploaded', date: new Date().toISOString().slice(0, 16).replace('T', ' ') }
+          ]
+        };
+  
         setFiles((prevFiles) => [...prevFiles, newFile]);
+        setResponseMessage("File uploaded successfully!");
+      } else {
+        setResponseMessage("Upload failed.");
+      }
+
+    } catch (err) {
+      console.error("Error: ", err);
+      setResponseMessage("Error sending data.");
     }
   };
-
   const triggerFileInput = () => {
     fileInputRef.current.click();
   };
@@ -426,7 +436,8 @@ const FileManagementSystem = () => {
               {/*{file.alerts.map((access, idx) => (
                 <div key={idx} className="flex justify-between items-center py-2 border-b">
                   <span className="text-sm">
-                    <span className="font-medium">{access.user}</span> {access.action}
+                    <span className="font-medium">{access.user}</span>{" "}
+                    {access.action}
                   </span>
                   <span className="text-xs text-gray-500">{access.date}</span>
                 </div>
@@ -437,6 +448,25 @@ const FileManagementSystem = () => {
       </div>
     </div>
   );
+  
+  const handleDeleteFile = async (fileName: string) => {
+    try {
+      const response = await window.agentAPI.sendCommand("delete", {
+        name: fileName,
+      });
+  
+      if (response.status === "success") {
+        console.log("File deleted successfully");
+        setFiles(prev => prev.filter(file => file.name !== fileName));
+        setFileName("");
+      } else {
+        console.log("Failed to delete file: " + response.message);
+      }
+    } catch (error) {
+      console.error("Error deleting file:", error);
+      alert("Failed to delete file");
+    }
+  };
 
 
   const handleDeleteFile = async (fileId) =>{
@@ -672,7 +702,10 @@ const FileManagementSystem = () => {
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-between h-16">
             <div className="flex space-x-4">
-              <Button variant={page === 'files' ? 'default' : 'ghost'} onClick={() => setPage('files')}>
+              <Button
+                variant={page === "files" ? "default" : "ghost"}
+                onClick={() => setPage("files")}
+              >
                 <FileText className="mr-2" size={16} /> Files
               </Button>
               <Button variant={page === 'alerts' ? 'default' : 'ghost'} onClick={() => {
@@ -680,7 +713,10 @@ const FileManagementSystem = () => {
                 setPage('alerts')}}>
                 <Bell className="mr-2" size={16} /> Alerts
               </Button>
-              <Button variant={page === 'users' ? 'default' : 'ghost'} onClick={() => setPage('users')}>
+              <Button
+                variant={page === "users" ? "default" : "ghost"}
+                onClick={() => setPage("users")}
+              >
                 <Users className="mr-2" size={16} /> Users
               </Button>
             </div>
