@@ -8,13 +8,13 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/alerts")
+@RequestMapping("/alerts")
 public class AlertController {
 
     @Autowired
     private AlertService alertService;
 
-    @GetMapping//api/alerts
+    @GetMapping
     public List<AlertEntity> getAllAlerts() {
         return alertService.getAllAlerts();
     }
