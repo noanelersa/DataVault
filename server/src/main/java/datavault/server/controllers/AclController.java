@@ -10,7 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/acl")
+@RequestMapping("/acl")
 public class AclController {
     @Autowired
     private AclService aclService;
