@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import LoginPage from './LoginPage';
 import FileManagementSystem from './FileManagementSystem';
 import ContactUs from './ContactUsPage';
+import AboutPage from './AboutPage';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 function App() {
@@ -27,6 +28,7 @@ function App() {
           }
         />
         <Route path="/contact" element={<ContactUs />} />
+        <Route path="/about" element={<AboutPage/>}/>
         <Route
           path="/files"
           element={
