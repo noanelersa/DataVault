@@ -258,7 +258,7 @@ const FileManagementSystem = () => {
   
     return (
       <div className="fixed inset-0 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
+        <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6 text-black">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold">
               Edit Permissions - {fileForPermissionEdit?.name}
@@ -316,7 +316,7 @@ const FileManagementSystem = () => {
           </div>
   
          
-          <div className="space-y-2 mb-4">
+          <div className="space-y-2 mb-4 hover:shadow-md">
             <Button onClick={() => setShowUserDropdown(!showUserDropdown)}>
               <UserPlus size={16} className="mr-2" />
               Grant permissions to a new user
@@ -362,7 +362,7 @@ const FileManagementSystem = () => {
             )}
           </div>
   
-          <div className="flex justify-end">
+          <div className="flex justify-end hover:shadow-md">
             <Button onClick={handleFileUpdate}>Save</Button>
           </div>
         </div>
