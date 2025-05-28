@@ -58,7 +58,7 @@ def register():
     token = request.cookies.get("auth_token")
 
     try:
-        register_data = AgentActionType.REGISTER_FILE.value.to_bytes(1, byteorder='big') + f"{BASE_PATH}{newFile['name']}$token={token}$".encode() + serialize_acl(newFile['sharedWith']).encode() + b"$"
+        register_data = AgentActionType.REGISTER_FILE.value.to_bytes(1, byteorder='big') + f"{BASE_PATH}{newFile['name']}$token={token}$".encode() + register_data.encode() + b"$"
         send_to_agent(register_data)
         return {"status": "success"}
     except Exception as e:
@@ -74,6 +74,9 @@ def update_permissions():
 
     try:
         register_data = serialize_acl(file_data['sharedWith'])  
+        token = request.cookies.get("auth_token")
+
+        register_data = AgentActionType.UPDATE_PERMISSIONS.value.to_bytes(1,byteorder='big') + f"{BASE_PATH}{file_data['name']}$token={token}$".encode() + register_data.encode() + b"$"
         send_to_agent(register_data)
         return {"status": "success"}
     except Exception as e:
@@ -86,7 +89,8 @@ def update_permissions():
 @require_auth
 def delete_file(file_name):
     try:
-        delete_data = AgentActionType.DELETE_FILE.value.to_bytes(1,byteorder='big') + f"{BASE_PATH}{file_name}$".encode()
+        token = request.cookies.get("auth_token")
+        delete_data = AgentActionType.DELETE_FILE.value.to_bytes(1,byteorder='big') + f"{BASE_PATH}{file_name}$token={token}$".encode()
         send_to_agent(delete_data)
         return {"status":"success"}
     except Exception as e:
