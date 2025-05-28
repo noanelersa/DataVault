@@ -26,6 +26,8 @@ Environment:
 
 #define USERNAME_NAX_SIZE 256
 #define AGENT_FILE_NAME_SIZE 512
+#define PASSWORD_MAX_SIZE 256
+#define TOKEN_SIZE 256
 
 // FNV-1a 32-bit Constants
 #define FNV_OFFSET_BASIS 2166136261u
@@ -89,10 +91,6 @@ GetPathFromUI(
 
 char*
 ParseAccessControl(
-    const char* input);
-
-char*
-ExtractFilePath(
     const char* input);
 
 char*
