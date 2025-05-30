@@ -58,54 +58,64 @@ const FileManagementSystem = () => {
 
   const handleFileUpload = async (e) => {
     const files = e.target.files;
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0) {return;}
     const file = files[0];
-    console.info(`File uploaded: ${file.name}`);
     try {
+      const filePath = await window.agentAPI.invoke("choose-file");
+      if (!filePath) {
+        setResponseMessage("No file selected.");
+        return;
+      }
+      const name = filePath.split("\\").pop();
       const command = {
-        name: file.name,
-        description: "Uploaded from UI",
-        content: "", 
-        acl: [
-          { name: "7075ed12", access: "read" },
-          { name: "user2", access: "write" }
+        name: name,
+        path: filePath,
+        sharedWith: [
+          { id: 1, name: "user1", permission: "read" }, // mock
+          { id: 2, name: "user2", permission: "read" },
         ]
       };
-  
+
       console.log("Sending upload command to agent:", command);
-  
+
       const result = await window.agentAPI.sendCommand("upload", command);
-  
+
       console.log("Agent response:", result);
-      
+
       if (result?.status === "success") {
         const newFile = {
           id: files.length + 1,
-          name: file.name,
-          uploadedBy: '7075ed12', // assuming current user is admin
-          uploadDate: new Date().toISOString().slice(0, 16).replace('T', ' '),
+          name: name,
+          uploadedBy: "7075ed12", // assuming current user is admin
+          uploadDate: new Date().toISOString().slice(0, 16).replace("T", " "),
           lastAccessed: new Date().toISOString().slice(0, 10),
           accessCount: 0,
           size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-          type: file.type || 'Unknown',
-          sharedWith: [{ id: 1, name: 'user1', access: 'read' },{ id: 2, name: 'user2', access: 'read' }],
+          type: file.type || "Unknown",
+          sharedWith: [
+            { id: 1, name: "user1", permission: "read" },
+            { id: 2, name: "user2", permission: "read" },
+          ],
           accessHistory: [
-            { user: '7075ed12', action: 'uploaded', date: new Date().toISOString().slice(0, 16).replace('T', ' ') }
-          ]
+            {
+              user: "7075ed12",
+              action: "uploaded",
+              date: new Date().toISOString().slice(0, 16).replace("T", " "),
+            },
+          ],
         };
-  
+
         setFiles((prevFiles) => [...prevFiles, newFile]);
         setResponseMessage("File uploaded successfully!");
       } else {
         setResponseMessage("Upload failed.");
       }
-
     } catch (err) {
       console.error("Error: ", err);
       setResponseMessage("Error sending data.");
     }
   };
-  
+
   const triggerFileInput = () => {
     fileInputRef.current.click();
   };
@@ -219,7 +229,7 @@ const FileManagementSystem = () => {
 
     const handleFileUpdate = async () => {
       if (!fileForPermissionEdit) return;
-    
+
       const updatedSharedWith = fileForPermissionEdit.sharedWith
         .map((user) => {
           const updated = editedPermissions.find((u) => u.id === user.id);
@@ -230,7 +240,7 @@ const FileManagementSystem = () => {
           return user;
         })
         .filter((user) => user !== null);
-    
+
       const newUsers = editedPermissions
         .filter(
           (user) =>
@@ -243,24 +253,26 @@ const FileManagementSystem = () => {
           name: user.name,
           access: user.access,
         }));
-    
-      const finalSharedWith = [...updatedSharedWith, ...newUsers];
-    
-      try {
-        const response = await window.agentAPI.sendCommand("update-permissions", {
-          name: fileForPermissionEdit.name,
-          sharedWith: finalSharedWith.map((user) => ({
-            name: user.name,
-            access: user.access,
-          })),
-        });
 
-    
+      const finalSharedWith = [...updatedSharedWith, ...newUsers];
+
+      try {
+        const response = await window.agentAPI.sendCommand(
+          "update-permissions",
+          {
+            name: fileForPermissionEdit.name,
+            sharedWith: finalSharedWith.map((user) => ({
+              name: user.name,
+              access: user.access,
+            })),
+          }
+        );
+
         console.log("Agent response:", response);
       } catch (err) {
         console.error("Failed to send update command to agent:", err);
       }
-    
+
       setFiles((prevFiles) =>
         prevFiles.map((file) => {
           if (file.id === fileForPermissionEdit.id) {
@@ -269,11 +281,10 @@ const FileManagementSystem = () => {
           return file;
         })
       );
-    
+
       setShowPermissionModal(false);
       setEditedPermissions([]);
     };
-    
 
     return (
       <div className="fixed inset-0 flex items-center justify-center z-50">
@@ -486,16 +497,16 @@ const FileManagementSystem = () => {
       </div>
     </div>
   );
-  
+
   const handleDeleteFile = async (fileName: string) => {
     try {
       const response = await window.agentAPI.sendCommand("delete", {
         name: fileName,
       });
-  
+
       if (response.status === "success") {
         console.log("File deleted successfully");
-        setFiles(prev => prev.filter(file => file.name !== fileName));
+        setFiles((prev) => prev.filter((file) => file.name !== fileName));
         setFileName("");
       } else {
         console.log("Failed to delete file: " + response.message);
@@ -526,27 +537,51 @@ const FileManagementSystem = () => {
         <table className="min-w-full divide-y divide-gray-600 text-white">
           <thead className="bg-transparent">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Name</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Uploaded By</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Last Accessed</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Access Count</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                Name
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                Uploaded By
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                Last Accessed
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                Access Count
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody className="bg-transparent divide-y divide-gray-600">
-            {files.map(file => (
+            {files.map((file) => (
               <tr key={file.id} className="hover:bg-gray-800/30">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{file.name}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.uploadedBy}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.lastAccessed}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.accessCount}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
+                  {file.name}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
+                  {file.uploadedBy}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
+                  {file.lastAccessed}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">
+                  {file.accessCount}
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm flex items-center space-x-2">
-                  <Button variant="ghost" size="sm"><Download size={16} /></Button>
-                  <Button variant="ghost" size="sm" onClick={() => setSelectedFile(file)}>
+                  <Button variant="ghost" size="sm">
+                    <Download size={16} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedFile(file)}
+                  >
                     <Info size={16} />
                   </Button>
-                  <Button onClick = {() =>handleDeleteFile(file.name)}>
-                    <Trash2 size={16}/>
+                  <Button onClick={() => handleDeleteFile(file.name)}>
+                    <Trash2 size={16} />
                   </Button>
                   <FileDropdown file={file} />
                 </td>
@@ -616,7 +651,6 @@ const FileManagementSystem = () => {
     </div>
   );
 
-
   return (
     <div
       className="min-h-screen bg-gradient-to-br from-[#0a1128] via-[#1b2a49] to-[#0a1128] text-white font-sans"
@@ -649,15 +683,18 @@ const FileManagementSystem = () => {
         </div>
       </div>
       <div className="max-w-7xl mx-auto px-4 py-6">
-      {selectedFile ? (
-      <FileInfoView file={selectedFile} onBack={() => setSelectedFile(null)} />
-      ) : (
-        {
-          files: renderFiles(),
-          alerts: renderAlerts(),
-          users: renderUsers(),
-        }[page]
-      )}
+        {selectedFile ? (
+          <FileInfoView
+            file={selectedFile}
+            onBack={() => setSelectedFile(null)}
+          />
+        ) : (
+          {
+            files: renderFiles(),
+            alerts: renderAlerts(),
+            users: renderUsers(),
+          }[page]
+        )}
       </div>
     </div>
   );
