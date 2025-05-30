@@ -33,7 +33,7 @@ const FileManagementSystem = () => {
   useEffect(() => {
     const fetchFiles = async () => {
       try {
-        const response = await axios.get('http://localhost:8080/file'); 
+        const response = await axios.get('http://193.106.55.113:8080/file'); 
         console.log("Server response:", response.data); 
         setFiles(response.data);
       } catch (error) {
@@ -71,6 +71,7 @@ const FileManagementSystem = () => {
         headers: {
           'Content-Type': 'application/json', // Set content type to JSON
         },
+        credentials: 'include',
         body: JSON.stringify(newFile), // Convert the data to JSON string
       })
         .then((response) => response.json()) // Parse the JSON response
@@ -110,58 +111,60 @@ const FileManagementSystem = () => {
   };
 
 
-  const FileDropdown = ({ file }) => { 
-  return (
-    <div className="relative" onClick={e => e.stopPropagation()}>
-      <Button 
-        variant="ghost" 
-        size="sm" 
-        onClick={() => setActiveDropdown(activeDropdown === file.id ? null : file.id)}>
-        <MoreVertical size={16} />
-      </Button>
-      {activeDropdown === file.id && (
-        <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-82 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50"
-          onClick={(e) => e.stopPropagation()}>   
-          <div className="py-1">
-            <button className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
-              <Share2 size={16} className="mr-2" />
-              Share Link
-            </button>
-            <div className="px-4 py-2 text-sm text-gray-700">
-              <div className="font-medium mb-2 flex items-center justify-between">
-                Shared with
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                  <UserPlus size={14} />
+  const FileDropdown = ({ file }) => {
+    return (
+      <div className="relative" onClick={e => e.stopPropagation()}>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={() => setActiveDropdown(activeDropdown === file.id ? null : file.id)}>
+          <MoreVertical size={16} />
+        </Button>
+  
+        {activeDropdown === file.id && (
+          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-82 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50"
+            onClick={(e) => e.stopPropagation()}>   
+            <div className="py-1">
+              <button className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                <Share2 size={16} className="mr-2" />
+                Share Link
+              </button>
+              <div className="px-4 py-2 text-sm text-gray-700">
+                <div className="font-medium mb-2 flex items-center justify-between">
+                  Shared with
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                    <UserPlus size={14} />
+                  </Button>
+                </div>
+                {file.sharedWith.map(user => (
+                  <div key={user.id} className="flex items-center justify-between py-1">
+                    <span>{user.name}</span>
+                    <span className="text-xs text-gray-500">{user.access}</span>
+                  </div>
+                ))}
+                <Button className="flex items-center w-full px-4 py-2 mt-2 text-sm text-gray-700 hover:bg-gray-100"
+                  onClick={() => {
+                    setFileForPermissionEdit(file);
+                    setShowPermissionModal(true);
+                  }}>
+                  <Settings size={16} className="mr-2" />
+                  Edit Permissions
                 </Button>
               </div>
-              {file.sharedWith.map(user => (
-                <div key={user.id} className="flex items-center justify-between py-1">
-                  <span>{user.name}</span>
-                  <span className="text-xs text-gray-500">{user.access}</span>
-                </div>
-              ))}
-              <Button className="flex items-center w-full px-4 py-2 mt-2 text-sm text-gray-700 hover:bg-gray-100"
-              onClick={() => {
-                setFileForPermissionEdit(file);
-                setShowPermissionModal(true);
-              }}>
-                <Settings size={16} className="mr-2" />
-                Edit Permissions
-              </Button>
             </div>
           </div>
-        </div>
-      )}
-      {showPermissionModal && fileForPermissionEdit && (
-        <FilePermissions 
-          fileForPermissionEdit={fileForPermissionEdit} 
-          setShowPermissionModal={setShowPermissionModal} 
-          setFileForPermissionEdit={setFileForPermissionEdit} 
-        />
-      )}
+        )}
+  
+        {showPermissionModal && fileForPermissionEdit && (
+          <FilePermissions 
+            fileForPermissionEdit={fileForPermissionEdit} 
+            setShowPermissionModal={setShowPermissionModal} 
+            setFileForPermissionEdit={setFileForPermissionEdit} 
+          />
+        )}
       </div>
     );
-  };
+  };  
 
   const FilePermissions = ({ fileForPermissionEdit }) => {
     const [showUserDropdown, setShowUserDropdown] = useState(false); //show users who still have no permissions for the selected file
@@ -225,6 +228,7 @@ const FileManagementSystem = () => {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: 'include',
         body: JSON.stringify({
           name: fileForPermissionEdit.name,
           sharedWith: finalSharedWith.map(user => ({
@@ -254,7 +258,7 @@ const FileManagementSystem = () => {
   
     return (
       <div className="fixed inset-0 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6">
+        <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6 text-black">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold">
               Edit Permissions - {fileForPermissionEdit?.name}
@@ -312,7 +316,7 @@ const FileManagementSystem = () => {
           </div>
   
          
-          <div className="space-y-2 mb-4">
+          <div className="space-y-2 mb-4 hover:shadow-md">
             <Button onClick={() => setShowUserDropdown(!showUserDropdown)}>
               <UserPlus size={16} className="mr-2" />
               Grant permissions to a new user
@@ -358,7 +362,7 @@ const FileManagementSystem = () => {
             )}
           </div>
   
-          <div className="flex justify-end">
+          <div className="flex justify-end hover:shadow-md">
             <Button onClick={handleFileUpdate}>Save</Button>
           </div>
         </div>
@@ -448,6 +452,7 @@ const FileManagementSystem = () => {
     try {
       const response = await fetch(`http://localhost:2513/delete/${fileName}`, {
         method: 'DELETE',
+        credentials: 'include',
       });
   
       if (response.ok) {
@@ -479,23 +484,23 @@ const FileManagementSystem = () => {
         </div>
       </div>
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+        <table className="min-w-full divide-y divide-gray-600 text-white">
+          <thead className="bg-transparent">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uploaded By</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Accessed</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Access Count</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Name</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Uploaded By</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Last Accessed</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Access Count</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-transparent divide-y divide-gray-600">
             {files.map(file => (
-              <tr key={file.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{file.name}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{file.uploadedBy}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{file.lastAccessed}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{file.accessCount}</td>
+              <tr key={file.id} className="hover:bg-gray-800/30">
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{file.name}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.uploadedBy}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.lastAccessed}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.accessCount}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm flex items-center space-x-2">
                   <Button variant="ghost" size="sm"><Download size={16} /></Button>
                   <Button variant="ghost" size="sm" onClick={() => setSelectedFile(file)}>
@@ -518,8 +523,11 @@ const FileManagementSystem = () => {
     <div className="space-y-4">
       <h2 className="text-2xl font-bold">Alerts</h2>
       <div className="space-y-2">
-        {alerts.map(alert => (
-          <div key={alert.id} className="flex items-center p-4 border rounded bg-white">
+        {[
+          { id: 1, message: 'User1 accessed report.pdf', time: '2 hours ago' },
+          { id: 2, message: 'User2 downloaded data.xlsx', time: '1 day ago' }
+        ].map(alert => (
+          <div key={alert.id} className="flex items-center p-4 border rounded bg-transparent">
             <AlertTriangle className="mr-2 text-yellow-500" size={16} />
             <div>
               <p className="text-sm font-medium">{alert.message}</p>
@@ -536,20 +544,20 @@ const FileManagementSystem = () => {
       <h2 className="text-2xl font-bold">Users</h2>
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+          <thead className="bg-transparent">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Active</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Username</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Last Active</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-transparent divide-y divide-white">
             {[
               { id: 1, name: 'user1', lastActive: '2024-12-26' },
               { id: 2, name: 'user2', lastActive: '2024-12-24' }
             ].map(user => (
-              <tr key={user.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{user.name}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.lastActive}</td>
+              <tr key={user.id} className="hover:bg-gray-800/30">
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{user.name}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{user.lastActive}</td>
               </tr>
             ))}
           </tbody>
@@ -559,8 +567,10 @@ const FileManagementSystem = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50" onClick={() => activeDropdown && setActiveDropdown(null)}>
-      <div className="bg-white border-b">
+    <div
+      className="min-h-screen bg-gradient-to-br from-[#0a1128] via-[#1b2a49] to-[#0a1128] text-white font-sans"
+      onClick={() => activeDropdown && setActiveDropdown(null)} >
+      <div className="border-b">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-between h-16">
             <div className="flex space-x-4">
@@ -584,9 +594,9 @@ const FileManagementSystem = () => {
           <FileInfoView file={selectedFile} onBack={() => setSelectedFile(null)} />
         ) : (
           {
-            'files': renderFiles(),
-            'alerts': renderAlerts(),
-            'users': renderUsers(),
+            files: renderFiles(),
+            alerts: renderAlerts(),
+            users: renderUsers(),
           }[page]
         )}
       </div>

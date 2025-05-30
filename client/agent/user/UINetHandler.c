@@ -1,7 +1,7 @@
 #include "UINetHandler.h"
 #include "ServerNetHandler.h"
 #include "Utils.h"
-#include <time.h>
+#include "DriverHandler.h"
 
 BOOL InitializeServer(SOCKET* listenSocket)
 {
@@ -71,6 +71,7 @@ DWORD WINAPI ServerWorker(LPVOID lpParam)
 {
     SOCKET clientSocket;
     char recvbuf[MAX_UI_MESSAGE_SIZE] = { 0 };
+    char outBuf[1024] = { 0 };
     int iResult = 0, iSendResult = 0;
 
 	// Parse the agent server context.
@@ -98,11 +99,16 @@ DWORD WINAPI ServerWorker(LPVOID lpParam)
             {
                 printf("Bytes received from UI: %d\n", iResult);
 
-				// Handle the UI request.
-				BOOLEAN ret = HandleUIRequest(recvbuf, iResult, username);
+                memset(outBuf, 0, sizeof(outBuf));
 
-				// Send the response to the UI.
-                iSendResult = send(clientSocket, &((char)ret), iResult, 0);
+                BOOLEAN success = HandleUIRequest(recvbuf,iResult,username,outBuf,sizeof(outBuf));
+
+                char sendBuf[1050] = { 0 };
+                sendBuf[0] = (char)success; 
+                strncpy(sendBuf + 1, outBuf, sizeof(sendBuf) - 1);
+
+                int totalSize = 1 + (int)strlen(sendBuf + 1); 
+                iSendResult = send(clientSocket, sendBuf, totalSize, 0);
 
                 if (iSendResult == SOCKET_ERROR)
                 {
@@ -112,6 +118,8 @@ DWORD WINAPI ServerWorker(LPVOID lpParam)
                     return 1;
                 }
                 printf("Bytes sent TO UI: %d\n", iSendResult);
+                printf("Sending to UI: success=%d, message=%s\n", success, outBuf);
+
             }
             else if (iResult == 0)
             {
@@ -143,7 +151,7 @@ DWORD WINAPI ServerWorker(LPVOID lpParam)
     return 0;
 }
 
-BOOLEAN HandleUIRequest(char* recvbuf, int recvbuflen, const char* username)
+BOOLEAN HandleUIRequest(char* recvbuf, int recvbuflen, const char* username,char* outStrBuf, int outBufSize)
 {
     if (recvbuflen == 0)
     {
@@ -161,6 +169,8 @@ BOOLEAN HandleUIRequest(char* recvbuf, int recvbuflen, const char* username)
         return HandleUIUpdatePermissions((recvbuf + 1), (recvbuflen - 1), username);
     case UI_REQUEST_DELETE_FILE:
         return HandleUIDeleteFile((recvbuf + 1), (recvbuflen - 1), username);
+    case UI_REQUEST_LOGIN:
+        return HandleUILogin((recvbuf + 1), (recvbuflen - 1),outStrBuf, outBufSize);
     default:
         printf("Error: Invalid requrest type received from UI: %d\n", retquestType);
         return FALSE;
@@ -171,62 +181,88 @@ BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username
 {
     HINTERNET hSession = NULL, hConnect = NULL, hRequest = NULL;
 
-    // JSON request body
-    char jsonData[MAX_JSON_SIZE*2] = { 0 };
+    // JSON request body.
+    char jsonData[MAX_JSON_DATA_SIZE] = { 0 };
 
-    // At the moment we don't support file hash functionality in the server.
-    // Therefore, we use the current time as the file hash for now - in Fnv1a format.
-	char timeBuffer[TIME_BUFFER_SIZE] = { 0 };
-	char fileHash[FNV_HASH_STR_LEN] = { 0 };
+    char* protectedFilePath = GetPathFromUI(recvbuf);
 
-    time_t timeNow = time(NULL);
-    struct tm* timeSt = localtime(&timeNow);
-    strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", timeSt);
-	Fnv1aHashString(timeBuffer, fileHash);
-
-	// TODO: Get the ACL from the UI.
-    // Follow the API format - USE recvbuf and recvbuflen.
-
-    char* jsonAclString = ParseAccessControl(recvbuf);
-
-    // Format JSON payload.
-    snprintf(jsonData, sizeof(jsonData),
-        "{ \"owner\": \"%s\", \"fileHash\": \"%s\", \"fileName\":\"secret.txt\",\"acl\": %s }",
-        username, fileHash, jsonAclString);
-
-    // Free the allocated memory.
-    free(jsonAclString);
-
-    // Open HTTP connection
-    if (!OpenHttpConnection(&hSession, &hConnect))
+    uint8_t fileHash[HASH_SIZE * 2 + 1] = { 0 };
+    if (ComputeFileSha256Hex(protectedFilePath, fileHash) != 0)
     {
+        printf("HandleUIFileRegister: Failed computing the file hash for file path %s\n", protectedFilePath);
+        
+        // Free the allocated memory.
+        free(protectedFilePath);
         return FALSE;
     }
 
-    // Open HTTP request (POST)
+    char* jsonAclString = ParseAccessControl(recvbuf);
+    
+    printf("recvbuf: %.*s\n", recvbuflen, recvbuf);
+
+    char* token = GetTokenFromUI(recvbuf);             
+    if (!token) {
+        printf("Error: failed to extract token.\n");   
+        free(jsonAclString);                          
+        return FALSE;                                
+    }
+
+    printf("The extracted token: %s\n",token);
+
+    // Format JSON payload.
+    snprintf(jsonData, sizeof(jsonData),
+        "{ \"owner\": \"%s\", \"fileName\": \"%s\", \"fileHash\":\"%.64s\",\"acl\":\%s\ }",
+        username, protectedFilePath, fileHash, jsonAclString);
+
+    // Open HTTP connection.
+    if (!OpenHttpConnection(&hSession, &hConnect))
+    {
+        // Free the allocated memory.
+        free(protectedFilePath);
+        free(jsonAclString);
+        free(token); 
+        return FALSE;
+    }
+
+    // Open HTTP request (POST).
     hRequest = HttpOpenRequestA(hConnect, "POST", "/file", NULL, NULL, NULL,
         INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 0);
     if (!hRequest) 
     {
+        free(token); 
         printf("Error: HttpOpenRequestA failed with %d\n", GetLastError());
         InternetCloseHandle(hConnect);
         InternetCloseHandle(hSession);
+
+        // Free the allocated memory.
+        free(protectedFilePath);
+        free(jsonAclString);
         return FALSE;
     }
 
-    char headers[512] = { 0 };
+    char headers[MAX_JSON_HEADERS_SIZE] = { 0 };
     snprintf(headers, sizeof(headers),
-        "Host: %s:%d\r\nContent-Type: application/json\r\nAccept: */*\r\n",
-        DV_SERVER_IP, DV_SERVER_PORT);
+    "Host: %s:%d\r\n"
+    "Content-Type: application/json\r\n"
+    "Accept: */*\r\n"
+    "Authorization: Bearer %s\r\n",
+    DV_SERVER_IP, DV_SERVER_PORT, token);
 
-    const DWORD headersLen = (DWORD)strlen(headers);
-    const DWORD jsonLen = (DWORD)strlen(jsonData);
+
+    const DWORD headersLen = (DWORD)strnlen(headers, MAX_JSON_HEADERS_SIZE);
+    const DWORD jsonLen = (DWORD)strnlen(jsonData, MAX_JSON_DATA_SIZE);
+
+    free(token);
 
     // Send HTTP request with JSON data
     if (!HttpSendRequestA(hRequest, headers, headersLen, jsonData, jsonLen))
     {
         printf("Error: HttpSendRequestA failed with %drr\n", GetLastError());
         CloseAllHandlers(&hRequest, &hConnect, &hSession);
+
+        // Free the allocated memory.
+        free(protectedFilePath);
+        free(jsonAclString);
         return FALSE;
     }
 
@@ -237,49 +273,49 @@ BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username
     if (!HttpQueryInfoA(hRequest, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &statusCode, &statusCodeSize, NULL))
     {
         printf("HttpQueryInfoA failed with error for file registeration: %d\n", GetLastError());
+        CloseAllHandlers(&hRequest, &hConnect, &hSession);
+
+        // Free the allocated memory.
+        free(protectedFilePath);
+        free(jsonAclString);
         return FALSE;
     }
 
     printf("Server responded with HTTP status code for file registeration: %d\n", statusCode);
 
-	// Check if the file was registered successfully.
-	// TODO: Deal with the case where the file was not registered becaue it already exists.
-    if (statusCode != ALLOW_ACCESS_CODE)
-    {
-        return FALSE;
-    }
-
-    // Read the response.
-    // TODO: Change to uuid size (fileId size).
-    char serverResponse[AGENT_FILE_ID_SIZE + 1] = { 0 };
-    DWORD bytesRead = 0;
-
-	// TODO: Remove if not needed.
-    // For reading in chunks.
-    // while (InternetReadFile(hRequest, serverResponse, sizeof(serverResponse), &bytesRead) && bytesRead > 0)
-
-    if (!InternetReadFile(hRequest, serverResponse, sizeof(serverResponse) - 1, &bytesRead))
-    {
-        printf("Error: InternetReadFile failed with %d in file registeration\n", GetLastError());
-    }
-
-	char magicFileIDCombined[AGENT_MAGIC_SIZE + AGENT_FILE_ID_SIZE] = { 0 };
-
-	// Combine the magic number and file ID.
-	strncpy(magicFileIDCombined, AGENT_MAGIC, AGENT_MAGIC_SIZE);
-	strncpy(magicFileIDCombined + AGENT_MAGIC_SIZE, serverResponse, AGENT_FILE_ID_SIZE);
-
-    char* protectedFilePath = GetPathFromUI(recvbuf);
-
-	// Prepend the magic number and file ID to the file.
-    PrependToFile(protectedFilePath, magicFileIDCombined, sizeof(magicFileIDCombined));
-
-    // Free the allocated memory.
-	free(protectedFilePath);
-
     // Cleanup
     CloseAllHandlers(&hRequest, &hConnect, &hSession);
 
+    // Check if the file was registered successfully.
+    // TODO: Deal with the case where the file was not registered becaue it already exists.
+    if (statusCode != SUCESS)
+    {
+        if (statusCode == ALREADY_EXIST)
+        {
+            printf("HandleUIFileRegister: File already registered in the server\n");
+        }
+        else if (statusCode == FAILURE)
+        {
+            printf("HandleUIFileRegister: File cannot be registered by the current user - not an owner\n");
+        }
+
+        // Free the allocated memory.
+        free(protectedFilePath);
+        free(jsonAclString);
+		return FALSE;
+    }
+
+    // Reduce one backslash from the file path - \\ -> \.
+    ReduceBackslashes(protectedFilePath);
+
+	// Save the file hash in the map.
+    MapEntryValue entry;
+	entry.fileHash = strdup(fileHash);
+    MapSet(protectedFilePath, &entry);
+
+    // Free the allocated memory.
+    free(protectedFilePath);
+    free(jsonAclString);
     return TRUE;
 }
 
@@ -287,8 +323,11 @@ BOOLEAN HandleUIUpdatePermissions(char* recvbuf, int recvbuflen, const char* use
 
     HINTERNET hSession = NULL, hConnect = NULL, hRequest = NULL;
 
-    char* extractedPath = ExtractFilePath(recvbuf);
+    char* extractedPath = GetPathFromUI(recvbuf);
     char* jsonAcl = ParseAccessControl(recvbuf);
+
+    
+    char *fileId = ExtractFileIdFromFile(extractedPath); //change to file hash later
     
     if (!extractedPath || !jsonAcl) {
         printf("Error: Failed to parse input data.\n");
@@ -313,11 +352,18 @@ BOOLEAN HandleUIUpdatePermissions(char* recvbuf, int recvbuflen, const char* use
         return FALSE;
     }
 
-    char *fileId = ExtractFileIdFromFile(extractedPath);
+    char* token = GetTokenFromUI(recvbuf);             
+    if (!token) {
+        printf("Error: failed to extract token.\n");   
+        return FALSE;                                
+    }
+
+    printf("The extracted token: %s\n",token);
+
     
     char* entry = strstr(aclCopy, "{\"username\":");
     while (entry) {
-        char username[128] = {0};
+        char username[USERNAME_NAX_SIZE] = {0};
         int access = -1;
     
         // Extract username
@@ -344,11 +390,11 @@ BOOLEAN HandleUIUpdatePermissions(char* recvbuf, int recvbuflen, const char* use
         access = atoi(accessStr + 9);
         printf("Extracted access level for %s: %d\n", username, access);
     
-        char endpoint[256];
+        char endpoint[ENDPOINT_MAX_SIZE];
         snprintf(endpoint, sizeof(endpoint), "/acl/%s/%s/%d", fileId, username, access);
         printf("Requesting endpoint: %s\n", endpoint);
     
-        char body[128];
+        char body[MAX_UI_MESSAGE_SIZE];
         snprintf(body, sizeof(body), "{ \"access\": %d }", access);
         printf("Sending JSON body: %s\n", body);
     
@@ -360,10 +406,13 @@ BOOLEAN HandleUIUpdatePermissions(char* recvbuf, int recvbuflen, const char* use
             break;
         }
     
-        char headers[512];
+        char headers[HEADER_BUFFER_SIZE];
         snprintf(headers, sizeof(headers),
-                 "Host: %s:%d\r\nContent-Type: application/json\r\nAccept: */*\r\n",
-                 DV_SERVER_IP, DV_SERVER_PORT);
+                 "Host: %s:%d\r\n"
+                 "Content-Type: application/json\r\n"
+                 "Accept: */*\r\n"
+                 "Authorization: Bearer %s\r\n",
+                 DV_SERVER_IP, DV_SERVER_PORT,token);
     
         DWORD headersLen = (DWORD)strlen(headers);
         DWORD bodyLen = (DWORD)strlen(body);
@@ -397,6 +446,7 @@ BOOLEAN HandleUIUpdatePermissions(char* recvbuf, int recvbuflen, const char* use
     free(extractedPath);
     free(jsonAcl);
     free(aclCopy);
+    free(token);
 
     return TRUE;
 }
@@ -405,7 +455,7 @@ BOOLEAN HandleUIDeleteFile(char* recvbuf, int recvbuflen, const char* username) 
 
     HINTERNET hSession = NULL, hConnect = NULL, hRequest = NULL;
 
-    char* extractedPath = ExtractFilePath(recvbuf);
+    char* extractedPath = GetPathFromUI(recvbuf);
 
     printf("Extracted file path: %s\n", extractedPath);
     if (!extractedPath) {
@@ -413,7 +463,7 @@ BOOLEAN HandleUIDeleteFile(char* recvbuf, int recvbuflen, const char* username) 
         return FALSE;
     }
 
-    char *fileId = ExtractFileIdFromFile(extractedPath);
+    char *fileId = ExtractFileIdFromFile(extractedPath); //will be removed since we use hashes.
 
     if (!fileId) {
         printf("Error: Failed to extract file ID.\n");
@@ -421,13 +471,22 @@ BOOLEAN HandleUIDeleteFile(char* recvbuf, int recvbuflen, const char* username) 
         return FALSE;
     }
 
+    char* token = GetTokenFromUI(recvbuf);             
+    if (!token) {
+        printf("Error: failed to extract token.\n");   
+        return FALSE;                                
+    }
+
+    printf("The extracted token: %s\n",token);
+
     if (!OpenHttpConnection(&hSession, &hConnect)) {
         printf("Error: Failed to open HTTP connection.\n");
         free(extractedPath);
+        free(token);
         return FALSE;
     }
 
-    char endpoint[256];
+    char endpoint[ENDPOINT_MAX_SIZE];
     snprintf(endpoint, sizeof(endpoint), "/acl/%s/%s", fileId, username);
     printf("Requesting DELETE endpoint: %s\n", endpoint);
 
@@ -437,13 +496,17 @@ BOOLEAN HandleUIDeleteFile(char* recvbuf, int recvbuflen, const char* username) 
         printf("Error: HttpOpenRequestA failed with %d\n", GetLastError());
         CloseAllHandlers(&hRequest, &hConnect, &hSession);
         free(extractedPath);
+        free(token);
         return FALSE;
     }
+    
 
-    char headers[512];
+    char headers[HEADER_BUFFER_SIZE];
     snprintf(headers, sizeof(headers),
-             "Host: %s:%d\r\nAccept: /\r\n",
-             DV_SERVER_IP, DV_SERVER_PORT);
+        "Host: %s:%d\r\n"
+        "Accept: */*\r\n"
+        "Authorization: Bearer %s\r\n",
+        DV_SERVER_IP, DV_SERVER_PORT,token);
 
     if (!HttpSendRequestA(hRequest, headers, (DWORD)strlen(headers), NULL, 0)) {
         printf("Error: HttpSendRequestA failed with %d\n", GetLastError());
@@ -469,6 +532,107 @@ BOOLEAN HandleUIDeleteFile(char* recvbuf, int recvbuflen, const char* username) 
     InternetCloseHandle(hRequest);
     CloseAllHandlers(&hRequest, &hConnect, &hSession);
     free(extractedPath);
+    free(token);
 
     return (statusCode == 200 || statusCode == 204); 
+}
+
+BOOLEAN HandleUILogin(char* recvbuf, int recvbuflen, char* token, int tokenSize) {
+
+    char username[USERNAME_NAX_SIZE] = {0};
+    char password[PASSWORD_MAX_SIZE] = {0};
+    char auth_token[TOKEN_SIZE] = {0};
+    int i = 0, j = 0;
+
+    while (i < recvbuflen && recvbuf[i] != '|' && i < sizeof(username) - 1) {
+        username[i] = recvbuf[i];
+        i++;
+    }
+    username[i] = '\0';
+
+    if (recvbuf[i] != '|') {
+        printf("Invalid login format\n");
+        return FALSE;
+    }
+    i++;
+
+    while (i < recvbuflen && j < sizeof(password) - 1) {
+        password[j++] = recvbuf[i++];
+    }
+    password[j] = '\0';
+
+    char body[MAX_UI_MESSAGE_SIZE];
+    snprintf(body, sizeof(body), "{\"username\":\"%s\",\"password\":\"%s\"}", username, password);
+    printf("Sending JSON: %s\n", body);
+
+    HINTERNET hInternet = InternetOpenA("LoginTest", INTERNET_OPEN_TYPE_DIRECT, NULL, NULL, 0);
+    if (!hInternet) {
+        printf("InternetOpen failed\n");
+        return FALSE;
+    }
+
+    HINTERNET hConnect = InternetConnectA(hInternet, DV_SERVER_IP, 8080, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
+    if (!hConnect) {
+        printf("InternetConnect failed\n");
+        InternetCloseHandle(hInternet);
+        return FALSE;
+    }
+
+    printf("InternetConnect succeeded\n");
+
+    HINTERNET hRequest = HttpOpenRequestA(hConnect, "POST", "/user/login", NULL, NULL, NULL,
+        INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 0);
+    if (!hRequest) {
+        printf("HttpOpenRequestA failed with %lu\n", GetLastError());
+        InternetCloseHandle(hConnect);
+        InternetCloseHandle(hInternet);
+        return FALSE;
+    }
+
+    const char* headers = "Content-Type: application/json\r\n";
+
+
+    const DWORD headersLen = (DWORD)strlen(headers);
+    const DWORD jsonLen = (DWORD)strlen(body);
+
+    BOOL sent = HttpSendRequestA(hRequest, headers, headersLen, (LPVOID)body, jsonLen);
+    if (!sent) {
+        printf("HttpSendRequestA failed with error: %lu\n", GetLastError());
+        InternetCloseHandle(hRequest);
+        InternetCloseHandle(hConnect);
+        InternetCloseHandle(hInternet);
+        return FALSE;
+    }
+
+    DWORD statusCode = 0;
+    DWORD statusCodeSize = sizeof(statusCode);
+    if (!HttpQueryInfoA(hRequest, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &statusCode, &statusCodeSize, NULL)) {
+        printf("HttpQueryInfoA failed: %lu\n", GetLastError());
+    } else {
+        printf("HTTP Status Code: %ld\n", statusCode);
+    }
+
+    char response[MAX_SERVER_RESPONSE] = {0};
+    DWORD bytesRead = 0;
+    if (InternetReadFile(hRequest, response, sizeof(response) - 1, &bytesRead)) {
+        response[bytesRead] = '\0';
+        printf("Response:\n%s\n", response);
+
+        if (bytesRead > 0 && bytesRead < sizeof(auth_token)) {
+        memcpy(auth_token, response, bytesRead);
+        auth_token[bytesRead] = '\0';  
+        printf("Auth token: %s\n", auth_token);
+        snprintf(token, tokenSize, "%s", auth_token);
+        } else {
+        printf("Invalid token size or empty response.\n");
+        }
+            } else {
+                printf("InternetReadFile failed\n");
+            }
+
+    InternetCloseHandle(hRequest);
+    InternetCloseHandle(hConnect);
+    InternetCloseHandle(hInternet);
+
+    return statusCode == 200;
 }
