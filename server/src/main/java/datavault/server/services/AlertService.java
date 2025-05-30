@@ -37,6 +37,9 @@ public class AlertService {
     public List<AlertEntity> getAlertsByUsername(String username) {
         return alertRepository.findByUser_Username(username);
     }
+    public List<AlertEntity> getAlertsByUserId(Long userId) {
+        return alertRepository.findByUser_UserId(userId);
+    }
 
     public List<AlertEntity> getAlertsByAction(String action) {
         return alertRepository.findByAction(action);
