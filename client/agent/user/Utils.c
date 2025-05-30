@@ -149,25 +149,6 @@ char* GetTokenFromUI(const char* input){
     return token;
 }
 
-char* ExtractFilePath(const char* input)
-{
-    if (!input) return NULL;
-
-    const char* dollar = strchr(input, '$'); //Find the first occurrence of the '$'.
-    if (!dollar) return NULL;
-
-    size_t length = (size_t)(dollar - input);
-    if (length == 0 || length > 256)  
-        return NULL;
-
-    char* fileId = (char*)malloc(length + 1);
-    if (!fileId) return NULL;
-
-    strncpy(fileId, input, length);
-    fileId[length] = '\0';
-
-    return fileId;
-}
 
 char* ExtractFileIdFromFile(char* path) {
     
