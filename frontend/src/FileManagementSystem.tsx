@@ -59,10 +59,15 @@ const FileManagementSystem = () => {
 
   const handleFileUpload = async (e) => {
     const files = e.target.files;
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0) {return;}
     const file = files[0];
-    console.info(`File uploaded: ${file.name}`);
     try {
+      const filePath = await window.agentAPI.invoke("choose-file");
+      if (!filePath) {
+        setResponseMessage("No file selected.");
+        return;
+      }
+      const name = filePath.split("\\").pop();
       const command = {
         name: file.name,
         uploadedBy: '7075ed12', // assuming current user is admin
@@ -76,40 +81,50 @@ const FileManagementSystem = () => {
           { user: '7075ed12', action: 'uploaded', date: new Date().toISOString().slice(0, 16).replace('T', ' ') }
         ]
       };
-  
+
       console.log("Sending upload command to agent:", command);
-  
+
       const result = await window.agentAPI.sendCommand("upload", command);
-  
+
       console.log("Agent response:", result);
-      
+
       if (result?.status === "success") {
         const newFile = {
           id: files.length + 1,
-          name: file.name,
-          uploadedBy: '7075ed12', // assuming current user is admin
-          uploadDate: new Date().toISOString().slice(0, 16).replace('T', ' '),
+          name: name,
+          uploadedBy: "7075ed12", // assuming current user is admin
+          uploadDate: new Date().toISOString().slice(0, 16).replace("T", " "),
           lastAccessed: new Date().toISOString().slice(0, 10),
           accessCount: 0,
           size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-          type: file.type || 'Unknown',
-          sharedWith: [{ id: 1, name: 'user1', access: 'read' },{ id: 2, name: 'user2', access: 'read' }],
+          type: file.type || "Unknown",
+          sharedWith: [
+            { id: 1, name: "user1", permission: "read" },
+            { id: 2, name: "user2", permission: "read" },
+          ],
           accessHistory: [
-            { user: '7075ed12', action: 'uploaded', date: new Date().toISOString().slice(0, 16).replace('T', ' ') }
-          ]
+            {
+              user: "7075ed12",
+              action: "uploaded",
+              date: new Date().toISOString().slice(0, 16).replace("T", " "),
+            },
+          ],
         };
-  
+
         setFiles((prevFiles) => [...prevFiles, newFile]);
         setResponseMessage("File uploaded successfully!");
       } else {
         setResponseMessage("Upload failed.");
       }
-
     } catch (err) {
       console.error("Error: ", err);
       setResponseMessage("Error sending data.");
     }
   };
+<<<<<<< HEAD
+=======
+
+>>>>>>> 26f9fed (added the ability to get the path's file dynamiclly in realtime)
   const triggerFileInput = () => {
     fileInputRef.current.click();
   };
@@ -448,16 +463,16 @@ const FileManagementSystem = () => {
       </div>
     </div>
   );
-  
+
   const handleDeleteFile = async (fileName: string) => {
     try {
       const response = await window.agentAPI.sendCommand("delete", {
         name: fileName,
       });
-  
+
       if (response.status === "success") {
         console.log("File deleted successfully");
-        setFiles(prev => prev.filter(file => file.name !== fileName));
+        setFiles((prev) => prev.filter((file) => file.name !== fileName));
         setFileName("");
       } else {
         console.log("Failed to delete file: " + response.message);
