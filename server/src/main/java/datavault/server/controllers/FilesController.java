@@ -39,4 +39,10 @@ public class FilesController {
     public ResponseEntity<List<FileGetDTO>> getAllFilesByUser(@PathVariable("username") String username) {
         return ResponseEntity.ok(filesService.getAllByUsername(username));
     }
+
+    @DeleteMapping("/{fileId}")
+    public ResponseEntity<?> removeFile(@PathVariable("fileId") String fileId) {
+        filesService.removeFile(fileId);
+        return ResponseEntity.ok().build();
+    }
 }

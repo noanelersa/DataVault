@@ -98,4 +98,10 @@ public class AclService {
         Optional<AclEntity> aclEntry = aclRepository.findByUserAndFile(user, file);
         return aclEntry.map(AclEntity::getAccessLevel).orElse(null);
     }
+
+    public void deleteAllByFileEntity(FileEntity file) {
+        List<AclEntity> aclEntities = aclRepository.findByFile(file);
+
+        aclRepository.deleteAll(aclEntities);
+    }
 }
