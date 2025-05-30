@@ -1,7 +1,7 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog} = require("electron");
 const path = require("path");
 const net = require("net");
-const { dialog } = require("electron");
+
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -18,13 +18,11 @@ function createWindow() {
 }
 
 app.whenReady().then(createWindow);
-BASE_PATH = "C:\\Users\\cs416\\Documents\\DataVault\\"
-
 
 async function chooseFile() {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     title: "Choose a file to upload",
-    properties: ["openFile"]
+    properties: ["openFile"],
   });
 
   if (canceled || filePaths.length === 0) {
@@ -34,36 +32,48 @@ async function chooseFile() {
   return filePaths[0];
 }
 
-ipcMain.handle("agent-command", async (event, command, args) => {
+ipcMain.handle("agent-command", async (command, args) => {
   console.log(`Received command from frontend: ${command}`);
 
   if (command === "upload" && args) {
-    console.info("upload button through electron")
-    const { name, description, acl, content } = args;
+    const { path, sharedWith } = args;
+    console.log("Received args:", args);
 
     try {
-      const newFile = { name, description, acl, content };
-
       const client = new net.Socket();
       let registerData = "";
 
-      for (const user of acl) {
-        const permissionByte =
-          user.permission === "read"
-            ? "\x00"
-            : user.permission === "write"
-            ? "\x01"
-            : "\x02";
+      for (const user of sharedWith) {
+        const permissionByte = user.permission === "read" ? "\x00" : "\x01";
         registerData += `${user.name};${permissionByte}|`;
       }
 
-      registerData = registerData.slice(0, -1);
-      registerData = `\x01${BASE_PATH}${name}$${registerData}$`;
-      console.log("Final command sent to agent:", command);
+      if (registerData.endsWith("|")) {
+        registerData = registerData.slice(0, -1);
+      }
+
+      const commandByte = Buffer.from([0x01]);
+      const pathBuffer = Buffer.from(path, "utf-8");
+      const registerBuffer = Buffer.from(registerData, "utf-8");
+      const endMarker = Buffer.from("$", "utf-8");
+      const separator = Buffer.from("$", "utf-8");
+
+      const fullData = Buffer.concat([
+        commandByte,
+        pathBuffer,
+        separator,
+        registerBuffer,
+        endMarker,
+      ]);
+
+      console.log(
+        "Register data being sent to agent:",
+        fullData.toString("utf-8")
+      );
 
       return new Promise((resolve, reject) => {
         client.connect(2512, "127.0.0.1", () => {
-          client.write(Buffer.from(registerData, "binary"));
+          client.write(fullData);
         });
 
         client.on("data", (data) => {
@@ -74,7 +84,7 @@ ipcMain.handle("agent-command", async (event, command, args) => {
 
         client.on("error", (err) => {
           console.error("Socket error:", err);
-          reject({ status: "error", message: err.message });
+          resolve({ status: "error", message: err.message });
         });
       });
     } catch (err) {
@@ -84,8 +94,6 @@ ipcMain.handle("agent-command", async (event, command, args) => {
   }
 
   if (command === "update-permissions" && args) {
-    console.info("update-permissions button through electron")
-
     const { name, acl } = args;
 
     let registerData = "";
@@ -115,13 +123,13 @@ ipcMain.handle("agent-command", async (event, command, args) => {
 
       client.on("error", (err) => {
         console.error("Socket error:", err);
-        reject({ status: "error", message: err.message });
+        resolve({ status: "error", message: err.message });
       });
     });
   }
 
   if (command === "delete" && args?.name) {
-    console.info("delete button through electron")
+    console.info("delete button through electron");
 
     const deleteData = `\x03C:\\Users\\Rick\\Documents\\DT\\${args.name}$`;
 
@@ -139,10 +147,15 @@ ipcMain.handle("agent-command", async (event, command, args) => {
 
       client.on("error", (err) => {
         console.error("Socket error:", err);
-        reject({ status: "error", message: err.message });
+        resolve({ status: "error", message: err.message });
       });
     });
   }
 
   return { status: "error", message: "Unknown command" };
+});
+
+ipcMain.handle("choose-file", async () => {
+  const path = await chooseFile();
+  return path;
 });

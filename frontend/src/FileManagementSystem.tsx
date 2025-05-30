@@ -58,54 +58,64 @@ const FileManagementSystem = () => {
 
   const handleFileUpload = async (e) => {
     const files = e.target.files;
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0) {return;}
     const file = files[0];
-    console.info(`File uploaded: ${file.name}`);
     try {
+      const filePath = await window.agentAPI.invoke("choose-file");
+      if (!filePath) {
+        setResponseMessage("No file selected.");
+        return;
+      }
+      const name = filePath.split("\\").pop();
       const command = {
-        name: file.name,
-        description: "Uploaded from UI",
-        content: "", 
-        acl: [
-          { name: "7075ed12", access: "read" },
-          { name: "user2", access: "write" }
+        name: name,
+        path: filePath,
+        sharedWith: [
+          { id: 1, name: "user1", permission: "read" }, // mock
+          { id: 2, name: "user2", permission: "read" },
         ]
       };
-  
+
       console.log("Sending upload command to agent:", command);
-  
+
       const result = await window.agentAPI.sendCommand("upload", command);
-  
+
       console.log("Agent response:", result);
-      
+
       if (result?.status === "success") {
         const newFile = {
           id: files.length + 1,
-          name: file.name,
-          uploadedBy: '7075ed12', // assuming current user is admin
-          uploadDate: new Date().toISOString().slice(0, 16).replace('T', ' '),
+          name: name,
+          uploadedBy: "7075ed12", // assuming current user is admin
+          uploadDate: new Date().toISOString().slice(0, 16).replace("T", " "),
           lastAccessed: new Date().toISOString().slice(0, 10),
           accessCount: 0,
           size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-          type: file.type || 'Unknown',
-          sharedWith: [{ id: 1, name: 'user1', access: 'read' },{ id: 2, name: 'user2', access: 'read' }],
+          type: file.type || "Unknown",
+          sharedWith: [
+            { id: 1, name: "user1", permission: "read" },
+            { id: 2, name: "user2", permission: "read" },
+          ],
           accessHistory: [
-            { user: '7075ed12', action: 'uploaded', date: new Date().toISOString().slice(0, 16).replace('T', ' ') }
-          ]
+            {
+              user: "7075ed12",
+              action: "uploaded",
+              date: new Date().toISOString().slice(0, 16).replace("T", " "),
+            },
+          ],
         };
-  
+
         setFiles((prevFiles) => [...prevFiles, newFile]);
         setResponseMessage("File uploaded successfully!");
       } else {
         setResponseMessage("Upload failed.");
       }
-
     } catch (err) {
       console.error("Error: ", err);
       setResponseMessage("Error sending data.");
     }
   };
-  
+
   const triggerFileInput = () => {
     fileInputRef.current.click();
   };
@@ -216,17 +226,18 @@ const FileManagementSystem = () => {
 
     const handleFileUpdate = async () => {
       if (!fileForPermissionEdit) return;
-    
-        const updatedSharedWith = fileForPermissionEdit.acl.map(user => {
-        const updated = editedPermissions.find(u => u.id === user.id);
-        if (updated) {
-          if (updated.access === 'none') { //remove user with 'none' permissions
-            return null;
+
+      const updatedSharedWith = fileForPermissionEdit.sharedWith
+        .map((user) => {
+          const updated = editedPermissions.find((u) => u.id === user.id);
+          if (updated) {
+            if (updated.access === "none") return null;
+            return { ...user, access: updated.access };
           }
           return user;
         })
         .filter((user) => user !== null);
-    
+
       const newUsers = editedPermissions
         .filter(
           (user) =>
@@ -239,24 +250,26 @@ const FileManagementSystem = () => {
           name: user.name,
           access: user.access,
         }));
-    
-      const finalSharedWith = [...updatedSharedWith, ...newUsers];
-    
-      try {
-        const response = await window.agentAPI.sendCommand("update-permissions", {
-          name: fileForPermissionEdit.name,
-          sharedWith: finalSharedWith.map((user) => ({
-            name: user.name,
-            access: user.access,
-          })),
-        });
 
-    
+      const finalSharedWith = [...updatedSharedWith, ...newUsers];
+
+      try {
+        const response = await window.agentAPI.sendCommand(
+          "update-permissions",
+          {
+            name: fileForPermissionEdit.name,
+            sharedWith: finalSharedWith.map((user) => ({
+              name: user.name,
+              access: user.access,
+            })),
+          }
+        );
+
         console.log("Agent response:", response);
       } catch (err) {
         console.error("Failed to send update command to agent:", err);
       }
-    
+
       setFiles((prevFiles) =>
         prevFiles.map((file) => {
           if (file.id === fileForPermissionEdit.id) {
@@ -265,11 +278,10 @@ const FileManagementSystem = () => {
           return file;
         })
       );
-    
+
       setShowPermissionModal(false);
       setEditedPermissions([]);
     };
-    
 
     return (
       <div className="fixed inset-0 flex items-center justify-center z-50">
@@ -436,16 +448,16 @@ const FileManagementSystem = () => {
       </div>
     </div>
   );
-  
+
   const handleDeleteFile = async (fileName: string) => {
     try {
       const response = await window.agentAPI.sendCommand("delete", {
         name: fileName,
       });
-  
+
       if (response.status === "success") {
         console.log("File deleted successfully");
-        setFiles(prev => prev.filter(file => file.name !== fileName));
+        setFiles((prev) => prev.filter((file) => file.name !== fileName));
         setFileName("");
       } else {
         console.log("Failed to delete file: " + response.message);
@@ -525,8 +537,8 @@ const FileManagementSystem = () => {
                   <Button variant="ghost" size="sm" onClick={() => setSelectedFile(file)}>
                     <Info size={16} />
                   </Button>
-                  <Button onClick = {() =>handleDeleteFile(file.name)}>
-                    <Trash2 size={16}/>
+                  <Button onClick={() => handleDeleteFile(file.name)}>
+                    <Trash2 size={16} />
                   </Button>
                   <FileDropdown file={file} />
                 </td>
@@ -584,7 +596,6 @@ const FileManagementSystem = () => {
       </div>
     </div>
   );
-
 
   return (
     <div
