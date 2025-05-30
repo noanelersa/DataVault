@@ -17,7 +17,6 @@ public class LoginService {
     public Boolean validateCradentials(LoginDTO loginDTO) {
         log.info("Validating user credentials: {}: {}", loginDTO.username(), loginDTO.password());
         String userDn = String.format(userDnPattern, loginDTO.username());
-        log.info(userDn);
         try {
             LdapContextSource contextSource = new LdapContextSource();
             contextSource.setUrl(ldapUrl);
