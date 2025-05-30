@@ -61,6 +61,10 @@ public class FilesService {
         return file.getFileId();
     }
 
+    public FileEntity getByFileId(String fileID) {
+        return fileRepository.findByFileId(fileID).orElse(null);
+    }
+
     public void updateFileHash(FilePutDTO filePutDTO) {
         FileEntity file = hashService.getFileByHash(filePutDTO.originalHash());
 
