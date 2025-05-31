@@ -62,12 +62,14 @@ const FileManagementSystem = () => {
     if (!files || files.length === 0) {return;}
     const file = files[0];
     try {
-      const filePath = await window.agentAPI.invoke("choose-file");
-      if (!filePath) {
-        setResponseMessage("No file selected.");
-        return;
-      }
-      const name = filePath.split("\\").pop();
+    //   const filePath = await window.agentAPI.invoke("choose-file");
+    //   if (!filePath) {
+    //     setResponseMessage("No file selected.");
+    //     return;
+    //   }
+    //   //here add the //// difference
+    //   const name = filePath.split("\\").pop();
+    
       const command = {
         name: file.name,
         uploadedBy: '7075ed12', // assuming current user is admin
@@ -84,11 +86,11 @@ const FileManagementSystem = () => {
 
       console.log("Sending upload command to agent:", command);
 
-      const result = await window.agentAPI.sendCommand("upload", command);
+      const response = await window.agentAPI.sendCommand("upload", command);
 
-      console.log("Agent response:", result);
+      console.log("Agent response:", response);
 
-      if (result?.status === "success") {
+      if (response?.status === "success") {
         const newFile = {
           id: files.length + 1,
           name: name,
@@ -99,8 +101,8 @@ const FileManagementSystem = () => {
           size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
           type: file.type || "Unknown",
           sharedWith: [
-            { id: 1, name: "user1", permission: "read" },
-            { id: 2, name: "user2", permission: "read" },
+            { id: 1, name: "user1", access: "read" },
+            { id: 2, name: "user2", access: "read" },
           ],
           accessHistory: [
             {
