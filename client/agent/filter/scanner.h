@@ -31,8 +31,18 @@ Environment:
 enum EFileAction {
     READ = 0,
     WRITE,
-
+    MANAGE,
+    UPDATE_HASH,
+ 
     NUM_FILE_ACTIONS
+};
+
+enum EAgentResponse {
+    NOT_ALLOWED = 0,
+    ALLOWED,
+    NOT_REGISTERED,
+
+	NUM_AGENT_RESPONSES
 };
 
 typedef struct _SCANNER_DATA {
@@ -74,9 +84,9 @@ extern SCANNER_DATA ScannerData;
 
 typedef struct _SCANNER_STREAM_HANDLE_CONTEXT {
 
-    BOOLEAN RescanRequired;
-    
-} SCANNER_STREAM_HANDLE_CONTEXT, *PSCANNER_STREAM_HANDLE_CONTEXT;
+    BOOLEAN RecalculateHash;
+
+} SCANNER_STREAM_HANDLE_CONTEXT, * PSCANNER_STREAM_HANDLE_CONTEXT;
 
 #pragma warning(push)
 #pragma warning(disable:4200) // disable warnings for structures with zero length arrays.
@@ -85,7 +95,7 @@ typedef struct _SCANNER_CREATE_PARAMS {
 
     WCHAR String[0];
 
-} SCANNER_CREATE_PARAMS, *PSCANNER_CREATE_PARAMS;
+} SCANNER_CREATE_PARAMS, * PSCANNER_CREATE_PARAMS;
 
 #pragma warning(pop)
 
@@ -100,43 +110,43 @@ typedef struct _SCANNER_CREATE_PARAMS {
 ///////////////////////////////////////////////////////////////////////////
 DRIVER_INITIALIZE DriverEntry;
 NTSTATUS
-DriverEntry (
+DriverEntry(
     _In_ PDRIVER_OBJECT DriverObject,
     _In_ PUNICODE_STRING RegistryPath
-    );
+);
 
 NTSTATUS
-ScannerUnload (
+ScannerUnload(
     _In_ FLT_FILTER_UNLOAD_FLAGS Flags
-    );
+);
 
 NTSTATUS
-ScannerQueryTeardown (
+ScannerQueryTeardown(
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
     _In_ FLT_INSTANCE_QUERY_TEARDOWN_FLAGS Flags
-    );
+);
 
 FLT_PREOP_CALLBACK_STATUS
-ScannerPreCreate (
+ScannerPreCreate(
     _Inout_ PFLT_CALLBACK_DATA Data,
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
-    _Flt_CompletionContext_Outptr_ PVOID *CompletionContext
-    );
+    _Flt_CompletionContext_Outptr_ PVOID* CompletionContext
+);
 
 FLT_POSTOP_CALLBACK_STATUS
-ScannerPostCreate (
+ScannerPostCreate(
     _Inout_ PFLT_CALLBACK_DATA Data,
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
     _In_opt_ PVOID CompletionContext,
     _In_ FLT_POST_OPERATION_FLAGS Flags
-    );
+);
 
 FLT_PREOP_CALLBACK_STATUS
-ScannerPreCleanup (
+ScannerPreCleanup(
     _Inout_ PFLT_CALLBACK_DATA Data,
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
-    _Flt_CompletionContext_Outptr_ PVOID *CompletionContext
-    );
+    _Flt_CompletionContext_Outptr_ PVOID* CompletionContext
+);
 
 FLT_PREOP_CALLBACK_STATUS
 ScannerPreRead(
@@ -146,30 +156,29 @@ ScannerPreRead(
 );
 
 FLT_PREOP_CALLBACK_STATUS
-ScannerPreWrite (
+ScannerPreWrite(
     _Inout_ PFLT_CALLBACK_DATA Data,
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
-    _Flt_CompletionContext_Outptr_ PVOID *CompletionContext
-    );
+    _Flt_CompletionContext_Outptr_ PVOID* CompletionContext
+);
 
 #if (WINVER >= 0x0602)
 
 FLT_PREOP_CALLBACK_STATUS
-ScannerPreFileSystemControl (
+ScannerPreFileSystemControl(
     _Inout_ PFLT_CALLBACK_DATA Data,
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
-    _Flt_CompletionContext_Outptr_ PVOID *CompletionContext
-    );
+    _Flt_CompletionContext_Outptr_ PVOID* CompletionContext
+);
 
 #endif
 
 NTSTATUS
-ScannerInstanceSetup (
+ScannerInstanceSetup(
     _In_ PCFLT_RELATED_OBJECTS FltObjects,
     _In_ FLT_INSTANCE_SETUP_FLAGS Flags,
     _In_ DEVICE_TYPE VolumeDeviceType,
     _In_ FLT_FILESYSTEM_TYPE VolumeFilesystemType
-    );
+);
 
 #endif /* __SCANNER_H__ */
-
