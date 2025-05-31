@@ -1,11 +1,13 @@
 package datavault.server.services;
 
 import datavault.server.dto.LoginDTO;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.ldap.core.support.LdapContextSource;
 import org.springframework.stereotype.Service;
 
 @Service
+@Slf4j
 public class LoginService {
     @Value("${spring.ldap.urls}")
     String ldapUrl;
@@ -13,6 +15,7 @@ public class LoginService {
     private final String userDnPattern = "uid=%s,ou=users,dc=datavault,dc=com";
 
     public Boolean validateCradentials(LoginDTO loginDTO) {
+        log.info("Validating user credentials: {}: {}", loginDTO.username(), loginDTO.password());
         String userDn = String.format(userDnPattern, loginDTO.username());
         try {
             LdapContextSource contextSource = new LdapContextSource();
@@ -20,7 +23,6 @@ public class LoginService {
             contextSource.setUserDn(userDn);
             contextSource.setPassword(loginDTO.password());
             contextSource.afterPropertiesSet();
-
             // Try to get context — this will throw if invalid
             contextSource.getContext(userDn, loginDTO.password());
             return true;

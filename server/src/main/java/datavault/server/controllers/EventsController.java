@@ -19,12 +19,12 @@ public class EventsController {
 
     @PostMapping
     public ResponseEntity<?> newEvent(@RequestBody EventDTO event) {
-        log.info("Event was captured, {} tried to {} file with id: '{}'",
+        log.info("Event was captured, {} tried to {} file with hash: '{}'",
                 event.user(),
                 event.action().name().toLowerCase(),
-                event.fileID());
+                event.fileHash());
 
         eventsService.validateEvent(event);
-        return ResponseEntity.ok().body("Event validated successfully!");
+        return ResponseEntity.ok().build();
     }
 }

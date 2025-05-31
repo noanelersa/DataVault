@@ -16,13 +16,15 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 @Service
 public class FilesService {
 
     @Autowired
     private FileRepository fileRepository;
+
+    @Autowired
+    private HashService hashService;
 
     @Autowired
     private HashService hashService;
@@ -54,15 +56,19 @@ public class FilesService {
         return file.getFileId();
     }
 
-    public void updateFileHash(FilePutDTO filePutDTO) {
-        Optional<FileEntity> file = fileRepository.findByFileId(filePutDTO.fileId());
+    public FileEntity getByFileId(String fileID) {
+        return fileRepository.findByFileId(fileID).orElse(null);
+    }
 
-        if (file.isEmpty()) {
+    public void updateFileHash(FilePutDTO filePutDTO) {
+        FileEntity file = hashService.getFileByHash(filePutDTO.originalHash());
+
+        if (file == null) {
             throw new NoSuchFileException();
         }
 
         UserEntity user = usersService.getUser(filePutDTO.username());
-        aclService.checkViolation(file.get(), user, Action.WRITE);
+        aclService.checkViolation(file, user, Action.WRITE);
 
         if (hashService.isHashAlreadyExistsForFile(file.get(), filePutDTO.newHash())) {
             return;
