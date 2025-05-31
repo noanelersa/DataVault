@@ -1,6 +1,6 @@
 services:
   server:
-    image: jerichowalls/server:1.0.0
+    image: jerichowalls/server:3.0.0
     container_name: datavault-server
     ports:
       - "8080:8080"
@@ -11,6 +11,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${DB_USER}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASS}
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_LDAP_URLS: ldap://[openldap-server]:389
     networks:
       - datavault-network
   db:

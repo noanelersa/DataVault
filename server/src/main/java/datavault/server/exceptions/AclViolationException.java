@@ -10,8 +10,8 @@ import static java.lang.String.format;
 public class AclViolationException extends RuntimeException {
 
     public AclViolationException(EventDTO event) {
-        super(format("%s violated the ACL by performing action %s on file with id: '%s'",
-                event.user(), event.action(), event.fileID()));
+        super(format("%s violated the ACL by performing action %s on file with hash: '%s'",
+                event.user(), event.action(), event.fileHash()));
     }
 
     public AclViolationException(String message) {

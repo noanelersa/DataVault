@@ -6,6 +6,8 @@ import datavault.server.entities.HashEntity;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 public class HashService {
 
@@ -16,5 +18,17 @@ public class HashService {
         HashEntity entity = hashRepository.findByHash(hash);
 
         return entity.getFile();
+    }
+
+    public Boolean isHashAlreadyExistsForFile(FileEntity file, String newHash) {
+        List<HashEntity> hashes = hashRepository.findAllByFile(file);
+
+        for (HashEntity hash : hashes) {
+            if (hash.getHash().equals(newHash)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
