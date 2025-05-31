@@ -1,7 +1,6 @@
 package datavault.server.services;
 
 import datavault.server.Repository.FileRepository;
-import datavault.server.Repository.HashRepository;
 import datavault.server.dto.AclDTO;
 import datavault.server.dto.FileGetDTO;
 import datavault.server.dto.FilePostDTO;
@@ -25,7 +24,7 @@ public class FilesService {
     private FileRepository fileRepository;
 
     @Autowired
-    private HashRepository hashRepository;
+    private HashService hashService;
 
     @Autowired
     private HashService hashService;
@@ -37,7 +36,7 @@ public class FilesService {
     private AclService aclService;
 
     public String newFile(FilePostDTO filePostDTO) {
-        if (hashRepository.existsByHash(filePostDTO.fileHash())) {
+        if (hashService.existsByHash(filePostDTO.fileHash())) {
             aclService.checkViolation(filePostDTO, Action.MANAGE);
             throw new FileAlreadyExistsException("");
         }
@@ -46,11 +45,7 @@ public class FilesService {
 
         FileEntity file = new FileEntity(filePostDTO.fileName(), user);
         file = this.fileRepository.save(file);
-
-        HashEntity hash = new HashEntity(filePostDTO.fileHash(), file);
-        hash.setOriginal(true);
-
-        hashRepository.save(hash);
+        hashService.saveOriginalHash(file, filePostDTO.fileHash());
 
         List<AclDTO> acl = filePostDTO.acl();
 
@@ -75,12 +70,11 @@ public class FilesService {
         UserEntity user = usersService.getUser(filePutDTO.username());
         aclService.checkViolation(file, user, Action.WRITE);
 
-        if (hashService.isHashAlreadyExistsForFile(file, filePutDTO.newHash())) {
+        if (hashService.isHashAlreadyExistsForFile(file.get(), filePutDTO.newHash())) {
             return;
         }
 
-        HashEntity newHash = new HashEntity(filePutDTO.newHash(), file);
-        hashRepository.save(newHash);
+        hashService.saveUpdatedHash(file.get(), filePutDTO.newHash());
     }
 
     public List<FileGetDTO> getAll() {
@@ -96,7 +90,7 @@ public class FilesService {
     }
 
     private FileGetDTO convertFileEntityToGetDto(FileEntity file) {
-        HashEntity hash = hashRepository.findByFileAndOriginal(file, true);
+        HashEntity hash = hashService.findOriginalFileHash(file);
         return new FileGetDTO(file.getFileId(), file.getFileName(), hash.getHash(),
                 hash.getTimestamp().toString(), file.getOwner().getUsername());
     }
@@ -112,5 +106,17 @@ public class FilesService {
         }
 
         return dtos;
+    }
+
+    public void removeFile(String fileId) {
+        FileEntity file = fileRepository.findByFileId(fileId).orElse(null);
+
+        if (file == null) {
+            throw new NoSuchFileException();
+        }
+
+        hashService.deleteAllByFileEntity(file);
+        aclService.deleteAllByFileEntity(file);
+        fileRepository.delete(file);
     }
 }

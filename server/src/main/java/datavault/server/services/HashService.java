@@ -31,4 +31,29 @@ public class HashService {
 
         return false;
     }
+
+    public boolean existsByHash(String hash) {
+        return hashRepository.existsByHash(hash);
+    }
+
+    public void saveOriginalHash(FileEntity file, String hash) {
+        HashEntity hashEntity = new HashEntity(hash, file);
+        hashEntity.setOriginal(true);
+
+        hashRepository.save(hashEntity);
+    }
+
+    public void saveUpdatedHash(FileEntity file, String hash) {
+        HashEntity hashEntity = new HashEntity(hash, file);
+        hashRepository.save(hashEntity);
+    }
+    public void deleteAllByFileEntity(FileEntity file) {
+        List<HashEntity> hashEntities = hashRepository.findAllByFile(file);
+
+        hashRepository.deleteAll(hashEntities);
+    }
+
+    public HashEntity findOriginalFileHash(FileEntity file) {
+        return hashRepository.findByFileAndOriginal(file, true);
+    }
 }
