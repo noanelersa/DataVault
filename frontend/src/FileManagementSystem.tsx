@@ -61,28 +61,30 @@ const FileManagementSystem = () => {
     if (!files || files.length === 0) {return;}
     const file = files[0];
     try {
-      const filePath = await window.agentAPI.invoke("choose-file");
-      if (!filePath) {
-        setResponseMessage("No file selected.");
-        return;
-      }
-      const name = filePath.split("\\").pop();
+    //   const filePath = await window.agentAPI.invoke("choose-file");
+    //   if (!filePath) {
+    //     setResponseMessage("No file selected.");
+    //     return;
+    //   }
+    //   //here add the //// difference
+    //   const name = filePath.split("\\").pop();
+    
       const command = {
-        name: name,
-        path: filePath,
+        name: file.name,
+        // path: filePath,
         sharedWith: [
-          { id: 1, name: "user1", permission: "read" }, // mock
-          { id: 2, name: "user2", permission: "read" },
+          { id: 1, name: "user1", access: "read" }, // mock
+          { id: 2, name: "user2", access: "read" },
         ]
       };
 
       console.log("Sending upload command to agent:", command);
 
-      const result = await window.agentAPI.sendCommand("upload", command);
+      const response = await window.agentAPI.sendCommand("upload", command);
 
-      console.log("Agent response:", result);
+      console.log("Agent response:", response);
 
-      if (result?.status === "success") {
+      if (response?.status === "success") {
         const newFile = {
           id: files.length + 1,
           name: name,
@@ -93,8 +95,8 @@ const FileManagementSystem = () => {
           size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
           type: file.type || "Unknown",
           sharedWith: [
-            { id: 1, name: "user1", permission: "read" },
-            { id: 2, name: "user2", permission: "read" },
+            { id: 1, name: "user1", access: "read" },
+            { id: 2, name: "user2", access: "read" },
           ],
           accessHistory: [
             {
@@ -227,25 +229,20 @@ const FileManagementSystem = () => {
     const handleFileUpdate = async () => {
       if (!fileForPermissionEdit) return;
 
-      const updatedSharedWith = fileForPermissionEdit.sharedWith
-        .map((user) => {
-          const updated = editedPermissions.find((u) => u.id === user.id);
-          if (updated) {
-            if (updated.access === "none") return null;
-            return { ...user, access: updated.access };
-          }
-          return user;
-        })
-        .filter((user) => user !== null);
+      const updatedSharedWith = fileForPermissionEdit.sharedWith.map(user => {
+        const updated = editedPermissions.find(u => u.id === user.id);
+        if (updated) {
+          if (updated.access === "none") return null;
+          return { ...user, access: updated.access };
+        }
+        return user;
+        }).filter(user => user !== null);
 
-      const newUsers = editedPermissions
-        .filter(
-          (user) =>
+      const newUsers = editedPermissions.filter(user =>
             !fileForPermissionEdit.sharedWith.some(
-              (sharedUser) => sharedUser.id === user.id
+              sharedUser => sharedUser.id === user.id
             )
-        )
-        .map((user) => ({
+        ).map(user => ({
           id: user.id,
           name: user.name,
           access: user.access,
@@ -270,17 +267,21 @@ const FileManagementSystem = () => {
         console.error("Failed to send update command to agent:", err);
       }
 
-      setFiles((prevFiles) =>
-        prevFiles.map((file) => {
-          if (file.id === fileForPermissionEdit.id) {
-            return { ...file, acl: finalSharedWith };
-          }
-          return file;
-        })
-      );
+      if (response?.status === "success") {
+        setFiles(prevFiles =>
+          prevFiles.map(file => {
+            if (file.id === fileForPermissionEdit.id) {
+              return { ...file, sharedWith: finalSharedWith };
+            }
+            return file;
+          })
+        );
+      
+        setShowPermissionModal(false);
+        setEditedPermissions([]);
+      }
 
-      setShowPermissionModal(false);
-      setEditedPermissions([]);
+
     };
 
     return (

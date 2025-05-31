@@ -1,7 +1,7 @@
-const { app, BrowserWindow, ipcMain, dialog} = require("electron");
+const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 const net = require("net");
-
+const { dialog } = require("electron");
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -18,6 +18,7 @@ function createWindow() {
 }
 
 app.whenReady().then(createWindow);
+BASE_PATH = "C:\\\\Users\\\\cs416\\\\Documents\\\\DataVault\\\\";
 
 async function chooseFile() {
   const { canceled, filePaths } = await dialog.showOpenDialog({
@@ -32,27 +33,107 @@ async function chooseFile() {
   return filePaths[0];
 }
 
-ipcMain.handle("agent-command", async (command, args) => {
+function serializeACL(aclList) {
+  console.log(aclList);
+  return aclList
+    .map((user) => `${user.name};${user.access === "read" ? "\x00" : "\x01"}`)
+    .join("|");
+}
+
+ipcMain.handle("agent-command", async (event, command, args) => {
   console.log(`Received command from frontend: ${command}`);
 
   if (command === "upload" && args) {
-    const { path, sharedWith } = args;
+    const { name, sharedWith } = args;
+    // console.log(path)
     console.log("Received args:", args);
 
     try {
       const client = new net.Socket();
       let registerData = "";
-
-      for (const user of sharedWith) {
-        const permissionByte = user.permission === "read" ? "\x00" : "\x01";
-        registerData += `${user.name};${permissionByte}|`;
-      }
+      registerData = serializeACL(sharedWith);
+      console.log(registerData);
 
       if (registerData.endsWith("|")) {
         registerData = registerData.slice(0, -1);
       }
+      const commandByte = Buffer.from([0x01]); 
+      const filePath = Buffer.from(`${BASE_PATH}${name}`, "utf-8");
+      const acl = Buffer.from(registerData, "utf-8");
+      const separator = Buffer.from("$", "utf-8");
 
-      const commandByte = Buffer.from([0x01]);
+      const message = Buffer.concat([
+        commandByte,
+        filePath,
+        separator,
+        acl,
+        separator,
+      ]);
+
+      console.log(
+        "Register data being sent to agent:",
+        message.toString("utf-8")
+      );
+
+      // const commandByte = Buffer.from([0x01]);
+      // const pathBuffer = Buffer.from(path, "utf-8");
+      // const registerBuffer = Buffer.from(registerData, "utf-8");
+      // const endMarker = Buffer.from("$", "utf-8");
+      // const separator = Buffer.from("$", "utf-8");
+
+      // const fullData = Buffer.concat([
+      //   commandByte,
+      //   pathBuffer,
+      //   separator,
+      //   registerBuffer,
+      //   endMarker,
+      // ]);
+
+      // console.log(
+      //   "Register data being sent to agent:",
+      //   fullData.toString("utf-8")
+      // );
+
+      return new Promise((resolve, reject) => {
+        client.connect(2512, "127.0.0.1", () => {
+          client.write(message);
+        });
+
+        client.on("data", (data) => {
+          const printable = Array.from(data)
+            .map((byte) =>
+              byte >= 32 && byte <= 126 ? String.fromCharCode(byte) : "."
+            )
+            .join("");
+          console.log("Printable:", printable);
+          client.end();
+          resolve({ status: "success", response: data.toString() });
+        });
+
+        client.on("error", (err) => {
+          console.error("Socket error:", err);
+          client.end();
+          resolve({ status: "error", message: err.message });
+
+        client.on('close', () => {
+          console.log('Socket connection closed.');
+        });
+        });
+
+      });
+    } catch (err) {
+      console.error("Unexpected error:", err);
+      return { status: "error", message: "Unexpected error" };
+    }
+  }
+
+  if (command === "update-permissions" && args) {
+    const { name, sharedWith } = args;
+    let registerData = "";
+    try {
+      registerData = serializeACL(sharedWith);
+
+      const commandByte = Buffer.from([0x02]);
       const pathBuffer = Buffer.from(path, "utf-8");
       const registerBuffer = Buffer.from(registerData, "utf-8");
       const endMarker = Buffer.from("$", "utf-8");
@@ -72,12 +153,13 @@ ipcMain.handle("agent-command", async (command, args) => {
       );
 
       return new Promise((resolve, reject) => {
+        const client = new net.Socket();
         client.connect(2512, "127.0.0.1", () => {
           client.write(fullData);
         });
 
         client.on("data", (data) => {
-          console.log("Agent succeeded:", data);
+          console.log("Permissions updated:", data);
           resolve({ status: "success", response: data.toString() });
           client.destroy();
         });
@@ -91,41 +173,6 @@ ipcMain.handle("agent-command", async (command, args) => {
       console.error("Unexpected error:", err);
       return { status: "error", message: "Unexpected error" };
     }
-  }
-
-  if (command === "update-permissions" && args) {
-    const { name, acl } = args;
-
-    let registerData = "";
-    for (const user of acl) {
-      const permissionByte =
-        user.permission === "read"
-          ? "\x00"
-          : user.permission === "write"
-          ? "\x01"
-          : "\x02";
-      registerData += `${user.user};${permissionByte}|`;
-    }
-    registerData = registerData.slice(0, -1);
-    registerData = `\x02C:\\Users\\Rick\\Documents\\DT\\${name}$${registerData}$`;
-
-    return new Promise((resolve, reject) => {
-      const client = new net.Socket();
-      client.connect(2512, "127.0.0.1", () => {
-        client.write(Buffer.from(registerData, "binary"));
-      });
-
-      client.on("data", (data) => {
-        console.log("Permissions updated:", data);
-        resolve({ status: "success", response: data.toString() });
-        client.destroy();
-      });
-
-      client.on("error", (err) => {
-        console.error("Socket error:", err);
-        resolve({ status: "error", message: err.message });
-      });
-    });
   }
 
   if (command === "delete" && args?.name) {
@@ -157,5 +204,6 @@ ipcMain.handle("agent-command", async (command, args) => {
 
 ipcMain.handle("choose-file", async () => {
   const path = await chooseFile();
+  console.log(path)
   return path;
 });
