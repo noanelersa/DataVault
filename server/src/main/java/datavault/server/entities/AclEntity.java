@@ -1,5 +1,6 @@
 package datavault.server.entities;
 
+import datavault.server.dto.AclDTO;
 import datavault.server.enums.Action;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -40,5 +41,9 @@ public class AclEntity {
         this.file = f;
         this.user = u;
         grantedAt = Timestamp.from(Instant.now());
+    }
+
+    public AclDTO toDto() {
+        return new AclDTO(this.user.getUsername(), this.accessLevel);
     }
 }

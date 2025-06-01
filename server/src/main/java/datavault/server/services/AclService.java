@@ -7,7 +7,6 @@ import datavault.server.entities.AclEntity;
 import datavault.server.entities.FileEntity;
 import datavault.server.entities.UserEntity;
 import datavault.server.enums.Action;
-import datavault.server.enums.Action.*;
 import datavault.server.exceptions.AclViolationException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -103,5 +102,19 @@ public class AclService {
         List<AclEntity> aclEntities = aclRepository.findByFile(file);
 
         aclRepository.deleteAll(aclEntities);
+    }
+
+    public List<AclDTO> getAllAclDTOForFile(FileEntity file) {
+        List<AclDTO> dtos = new ArrayList<>();
+
+        for (AclEntity entity: aclRepository.findAllByFile(file)) {
+            dtos.add(entity.toDto());
+        }
+
+        return dtos;
+    }
+
+    public List<AclEntity> getAllAclForUser(UserEntity user) {
+        return aclRepository.findAllByUser(user);
     }
 }

@@ -1,5 +1,7 @@
 package datavault.server.dto;
 
+import java.util.List;
+
 public record FileGetDTO(String fileId, String originalFileName, String originalFileHash, String uploadTime,
-                         String owner) {
+                         String owner, List<AclDTO> acl) {
 }
