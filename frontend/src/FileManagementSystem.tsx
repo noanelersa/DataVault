@@ -524,7 +524,7 @@ const FileManagementSystem = () => {
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm flex items-center space-x-2">
-                  <Button variant="ghost" size="sm"><Download size={16} /></Button>
+                  {/* <Button variant="ghost" size="sm"><Download size={16} /></Button> */}
                   <Button variant="ghost" size="sm" onClick={() => setSelectedFile(file)}>
                     <Info size={16} />
                   </Button>
