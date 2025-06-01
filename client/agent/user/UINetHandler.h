@@ -28,6 +28,9 @@ Environment:
 #define DV_AGENT_PORT "2512"
 
 #define MAX_UI_MESSAGE_SIZE 1024
+#define MAX_SERVER_RESPONSE 1024
+#define HEADER_BUFFER_SIZE 1024
+#define ENDPOINT_MAX_SIZE 256
 
 // TODO: Remove when file hsahing is implemented.
 #define TIME_BUFFER_SIZE 64
@@ -41,6 +44,7 @@ Environment:
 #define UI_REQUEST_FILE_REGISTER 1
 #define UI_REQUEST_UPDATE_PERMISSIONS 2
 #define UI_REQUEST_DELETE_FILE 3
+#define UI_REQUEST_LOGIN 4
 
 typedef struct _AGENT_SERVER_CONTEXT {
 
@@ -61,7 +65,9 @@ BOOLEAN
 HandleUIRequest(
     char* recvbuf,
     int recvbuflen,
-    const char* username);
+    const char* username,
+    char* outStrBuf,
+    int outBufSize);
 
 BOOLEAN 
 HandleUIFileRegister(
@@ -80,5 +86,13 @@ HandleUIDeleteFile(
     char* recvbuf,
     int recvbuflen,
     const char* username);
+
+BOOLEAN
+HandleUILogin(
+    char* recvbuf,
+    int recvbuflen,
+    char* token,
+    int tokenSize
+);
 
 #endif //  __UI_NET_HANDLER_H__

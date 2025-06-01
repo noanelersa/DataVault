@@ -26,6 +26,8 @@ Environment:
 
 #define USERNAME_NAX_SIZE 256
 #define AGENT_FILE_NAME_SIZE 512
+#define PASSWORD_MAX_SIZE 256
+#define TOKEN_SIZE 256
 
 // FNV-1a 32-bit Constants
 #define FNV_OFFSET_BASIS 2166136261u
@@ -89,10 +91,6 @@ GetPathFromUI(
 
 char*
 ParseAccessControl(
-    const char* input);
-
-char*
-ExtractFilePath(
     const char* input);
 
 char*
@@ -185,5 +183,7 @@ static const uint32_t k[64] = {
     0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
     0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
 };
+char* GetTokenFromUI(
+    const char* input);
 
 #endif //  __UTILS_H__

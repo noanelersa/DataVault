@@ -60,46 +60,46 @@ BOOLEAN GetSystemUser(CHAR* username, const DWORD usernamsSize)
 
 char* GetPathFromUI(const char* input) 
 {
-    char* dollar_pos = strchr(input, '$');
-    if (!dollar_pos) 
-    {
-        return NULL; // No '$' found, invalid input
-    }
+     const char* delim = strchr(input, '$');
+    if (!delim) return NULL;
 
-    size_t path_length = dollar_pos - input;
+    size_t pathLen = delim - input;
+    char* path = (char*)malloc(pathLen + 1);
+    if (!path) return NULL;
 
-    char* path = (char*)malloc(path_length + 1);
-    if (!path)
-    {
-        return NULL;
-    }
-
-    strncpy(path, input, path_length);
-    path[path_length] = '\0';
+    strncpy(path, input, pathLen);
+    path[pathLen] = '\0';
 
     return path;
 }
 
 char* ParseAccessControl(const char* input)
 {
-     // Find the start of the user list (after the first '$')
-    const char* user_list = strchr(input, '$');
-    if (!user_list || *(user_list + 1) == '\0')
-    {
-        return strdup("[]"); // Return empty JSON array if no users are found
-    }
-    user_list++;
+    const char* first_dollar = strchr(input, '$');
+    if (!first_dollar) return strdup("[]");
 
-    UserAccess users[100]; // Assume max 100 users for simplicity
+    const char* second_dollar = strchr(first_dollar + 1, '$');
+    if (!second_dollar) return strdup("[]");
+
+    const char* third_dollar = strchr(second_dollar + 1, '$');
+    if (!third_dollar || third_dollar == second_dollar + 1) return strdup("[]");
+
+    size_t acl_len = third_dollar - (second_dollar + 1);
+    char* acl_str = (char*)malloc(acl_len + 1);
+    if (!acl_str) return NULL;
+    strncpy(acl_str, second_dollar + 1, acl_len);
+    acl_str[acl_len] = '\0';
+
+    UserAccess users[100];
     int user_count = 0;
 
-    char* token = strtok(strdup(user_list), "|");
+    char* token = strtok(acl_str, "|");
     while (token && user_count < 100)
     {
         char* semicolon = strchr(token, ';');
         if (semicolon)
         {
-            *semicolon = '\0'; // Split username and access
+            *semicolon = '\0';
             users[user_count].access = atoi(semicolon + 1);
             strncpy(users[user_count].username, token, sizeof(users[user_count].username) - 1);
             users[user_count].username[sizeof(users[user_count].username) - 1] = '\0';
@@ -113,12 +113,12 @@ char* ParseAccessControl(const char* input)
     if (!json_result) return NULL;
     strcpy(json_result, "[");
 
-    for (int i = 0; i < user_count; i++) 
+    for (int i = 0; i < user_count; i++)
     {
         char entry[512];
         snprintf(entry, sizeof(entry), "{\"username\": \"%s\", \"access\": %d}", users[i].username, users[i].access);
         strcat(json_result, entry);
-        if (i < user_count - 1) 
+        if (i < user_count - 1)
         {
             strcat(json_result, ", ");
         }
@@ -128,25 +128,27 @@ char* ParseAccessControl(const char* input)
     return json_result;
 }
 
-char* ExtractFilePath(const char* input)
-{
-    if (!input) return NULL;
+char* GetTokenFromUI(const char* input){
 
-    const char* dollar = strchr(input, '$'); //Find the first occurrence of the '$'.
-    if (!dollar) return NULL;
+    const char* tokenMarker = "token=";
+    const char* tokenStart = strstr(input, tokenMarker);
+    if (!tokenStart) return NULL;
 
-    size_t length = (size_t)(dollar - input);
-    if (length == 0 || length > 256)  
-        return NULL;
+    tokenStart += strlen(tokenMarker);
 
-    char* fileId = (char*)malloc(length + 1);
-    if (!fileId) return NULL;
+    const char* tokenEnd = strchr(tokenStart, '$');
+    if (!tokenEnd) return NULL;
 
-    strncpy(fileId, input, length);
-    fileId[length] = '\0';
+    size_t tokenLen = tokenEnd - tokenStart;
+    char* token = (char*)malloc(tokenLen + 1);
+    if (!token) return NULL;
 
-    return fileId;
+    strncpy(token, tokenStart, tokenLen);
+    token[tokenLen] = '\0';
+
+    return token;
 }
+
 
 char* ExtractFileIdFromFile(char* path) {
     
@@ -157,15 +159,15 @@ char* ExtractFileIdFromFile(char* path) {
         return NULL; 
     }
 
-    char buffer[1024];
+    char buffer[AGENT_MAGIC_SIZE + AGENT_FILE_ID_SIZE];
     size_t bytesRead = fread(buffer, 1, sizeof(buffer), file);
     fclose(file);
 
-    if (strstr(buffer, "DTVL") == NULL) {
+    if (strstr(buffer, AGENT_MAGIC) == NULL) {
         return NULL; 
     }
 
-    char *fileIdStart = strstr(buffer, "DTVL") + 4; 
+    char *fileIdStart = buffer + AGENT_MAGIC_SIZE;
     if (!fileIdStart) {
         return NULL; 
     }
