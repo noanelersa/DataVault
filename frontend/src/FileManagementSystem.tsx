@@ -33,11 +33,23 @@ const FileManagementSystem = () => {
   useEffect(() => {
     const fetchFiles = async () => {
       try {
-        const response = await axios.get('http://193.106.55.113:8080/file'); 
-        console.log("Server response:", response.data); 
-        setFiles(response.data);
-      } catch (error) {
-        console.error('Error fetching files:', error); 
+        const response = await fetch('/api/file', {
+          method: 'GET', // or 'POST', 'PUT', etc.
+          headers: {
+            'Content-Type': 'application/json',
+            // Add any other headers if needed
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+        const json = await response.json();
+        console.info(json);
+        setFiles(json);
+      } catch (err: any) {
+        throw new Error(`HTTP error! Status: ${err}`);
       }
     };
   
@@ -489,18 +501,28 @@ const FileManagementSystem = () => {
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Name</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Uploaded By</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Last Accessed</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Access Count</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Uploaded Time</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">File Hash</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-transparent divide-y divide-gray-600">
             {files.map(file => (
-              <tr key={file.id} className="hover:bg-gray-800/30">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{file.name}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.uploadedBy}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.lastAccessed}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.accessCount}</td>
+              <tr key={file.fileId} className="hover:bg-gray-800/30">
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{file.originalFileName.split('\\').pop()}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.owner}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.uploadTime.split(' ')[0]}</td>
+                <td
+                  className="relative px-6 py-4 whitespace-nowrap text-sm text-white cursor-pointer group"
+                  onClick={() => navigator.clipboard.writeText(file.originalFileHash)}
+                >
+                  {file.originalFileHash.slice(0, 8)}...
+
+                  {/* Tooltip */}
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-10">
+                    Click to copy
+                  </div>
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm flex items-center space-x-2">
                   <Button variant="ghost" size="sm"><Download size={16} /></Button>
                   <Button variant="ghost" size="sm" onClick={() => setSelectedFile(file)}>
