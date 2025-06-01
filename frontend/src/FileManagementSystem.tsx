@@ -11,7 +11,6 @@ const FileManagementSystem = () => {
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [responseMessage, setResponseMessage] = useState("");
-  const fileInputRef = useRef(null);
 
   const [showPermissionModal, setShowPermissionModal] = useState(false); //modal for editing permissions
   const [fileForPermissionEdit, setFileForPermissionEdit] = useState(null); //the file we change the permissions to
@@ -57,18 +56,21 @@ const FileManagementSystem = () => {
   }, []);
   
 
-  const handleFileUpload = async (e) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) {return;}
-    const file = files[0];
+  const handleFileUpload = async () => {
+
     try {
-    //   const filePath = await window.agentAPI.invoke("choose-file");
-    //   if (!filePath) {
-    //     setResponseMessage("No file selected.");
-    //     return;
-    //   }
-    //   //here add the //// difference
-    //   const name = filePath.split("\\").pop();
+    
+      const fileInfo = await window.agentAPI.invoke("choose-file");
+
+      if (fileInfo===null) {
+          setResponseMessage("No file selected or error reading file info.");
+          return;
+      }
+
+      const filePath = fileInfo.path;
+      const fileName = filePath.split('\\').pop(); 
+      const fileSize = fileInfo.size; 
+      const fileType = fileInfo.type; 
     
       const command = {
         name: file.name,
@@ -83,23 +85,21 @@ const FileManagementSystem = () => {
           { user: '7075ed12', action: 'uploaded', date: new Date().toISOString().slice(0, 16).replace('T', ' ') }
         ]
       };
-
-      console.log("Sending upload command to agent:", command);
-
       const response = await window.agentAPI.sendCommand("upload", command);
-
+      // const response = { status: "success" }
       console.log("Agent response:", response);
 
       if (response?.status === "success") {
+        const date= new Date().toISOString().slice(0, 16).replace("T", " ")
         const newFile = {
           id: files.length + 1,
-          name: name,
+          name: fileName,
           uploadedBy: "7075ed12", // assuming current user is admin
-          uploadDate: new Date().toISOString().slice(0, 16).replace("T", " "),
+          uploadDate: date,
           lastAccessed: new Date().toISOString().slice(0, 10),
           accessCount: 0,
-          size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-          type: file.type || "Unknown",
+          size: `${fileSize} MB`,
+          type: fileType,
           sharedWith: [
             { id: 1, name: "user1", access: "read" },
             { id: 2, name: "user2", access: "read" },
@@ -108,7 +108,7 @@ const FileManagementSystem = () => {
             {
               user: "7075ed12",
               action: "uploaded",
-              date: new Date().toISOString().slice(0, 16).replace("T", " "),
+              date: date,
             },
           ],
         };
@@ -126,10 +126,13 @@ const FileManagementSystem = () => {
 <<<<<<< HEAD
 =======
 
+<<<<<<< HEAD
 >>>>>>> 26f9fed (added the ability to get the path's file dynamiclly in realtime)
   const triggerFileInput = () => {
     fileInputRef.current.click();
   };
+=======
+>>>>>>> 4d3219c (solved the file explorer openning twice problem and developed the solution of getting the path,type and size of the file dynamically all in one place.)
 
   const openSharingPopup = (file, setFileForPermissionEdit, setShowPermissionModal) => {
     // Remove existing popup if already open
@@ -509,13 +512,7 @@ const FileManagementSystem = () => {
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Files</h2>
         <div>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileUpload}
-            className="hidden"
-          />
-          <Button onClick={triggerFileInput}>
+          <Button onClick={handleFileUpload}> 
             <Upload className="mr-2" size={16} /> Upload New File
           </Button>
         </div>
