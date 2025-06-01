@@ -305,7 +305,7 @@ Return Value
             {
                 if (ComputeFileSha256Hex(filePath, currentFileHash) != 0) {
                     printf("ScannerWorker: Failed computing the file hash for file path %s\n", filePath);
-                    break;
+                    continue;
                 }
             }
 
@@ -338,7 +338,7 @@ Return Value
             {
                 if (ComputeFileSha256Hex(filePath, currentFileHash) != 0) {
                     printf("ScannerWorker: Failed computing the file hash for file path %s\n", filePath);
-                    break;
+                    continue;
                 }
 
                 // printf("ScannerWorker: old file hash %.32s and new one %.32s\n", entryValue->fileHash, currentFileHash);

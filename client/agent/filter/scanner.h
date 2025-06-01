@@ -45,6 +45,8 @@ enum EAgentResponse {
 	NUM_AGENT_RESPONSES
 };
 
+#define USERSPACE_ACTION_TIMEOUT -1 * 1000 * 1000 * 10
+
 typedef struct _SCANNER_DATA {
 
     //
