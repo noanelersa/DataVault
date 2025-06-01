@@ -2,6 +2,8 @@ const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 const net = require("net");
 const { dialog } = require("electron");
+const fs = require("fs").promises; // Use promises version of fs for async/await
+const mime = require("mime-types");
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -18,9 +20,10 @@ function createWindow() {
 }
 
 app.whenReady().then(createWindow);
-BASE_PATH = "C:\\\\Users\\\\cs416\\\\Documents\\\\DataVault\\\\";
+// BASE_PATH = "C:\\\\Users\\\\cs416\\\\Documents\\\\DataVault\\\\";
 
 async function chooseFile() {
+  //this function gets the path, type and size of the file dynamically
   const { canceled, filePaths } = await dialog.showOpenDialog({
     title: "Choose a file to upload",
     properties: ["openFile"],
@@ -29,8 +32,23 @@ async function chooseFile() {
   if (canceled || filePaths.length === 0) {
     return null;
   }
+  const filePath = filePaths[0];
 
-  return filePaths[0];
+  try {
+    const stats = await fs.stat(filePath);
+    const fileSize = (stats.size / (1024 * 1024)).toFixed(1);
+
+    const fileType = mime.lookup(filePath) || "application/octet-stream";
+
+    return {
+      path: filePath,
+      size: fileSize,
+      type: fileType,
+    };
+  } catch (err) {
+    console.error("Error getting file stats or MIME type:", err);
+    return null;
+  }
 }
 
 function serializeACL(aclList) {
@@ -40,25 +58,32 @@ function serializeACL(aclList) {
     .join("|");
 }
 
+ipcMain.handle("choose-file", async () => {
+  const fileInfo = await chooseFile();
+  console.log("File info chosen from dialog:", fileInfo);
+  return fileInfo;
+});
+
 ipcMain.handle("agent-command", async (event, command, args) => {
   console.log(`Received command from frontend: ${command}`);
 
   if (command === "upload" && args) {
-    const { name, sharedWith } = args;
-    // console.log(path)
+    const { path, sharedWith } = args;
+    console.log(path);
+    const transformedFilePath = path.replaceAll("\\", "\\\\\\\\");
+    console.log(transformedFilePath);
     console.log("Received args:", args);
 
     try {
       const client = new net.Socket();
       let registerData = "";
       registerData = serializeACL(sharedWith);
-      console.log(registerData);
 
       if (registerData.endsWith("|")) {
         registerData = registerData.slice(0, -1);
       }
-      const commandByte = Buffer.from([0x01]); 
-      const filePath = Buffer.from(`${BASE_PATH}${name}`, "utf-8");
+      const commandByte = Buffer.from([0x01]);
+      const filePath = Buffer.from(transformedFilePath, "utf-8");
       const acl = Buffer.from(registerData, "utf-8");
       const separator = Buffer.from("$", "utf-8");
 
@@ -75,37 +100,12 @@ ipcMain.handle("agent-command", async (event, command, args) => {
         message.toString("utf-8")
       );
 
-      // const commandByte = Buffer.from([0x01]);
-      // const pathBuffer = Buffer.from(path, "utf-8");
-      // const registerBuffer = Buffer.from(registerData, "utf-8");
-      // const endMarker = Buffer.from("$", "utf-8");
-      // const separator = Buffer.from("$", "utf-8");
-
-      // const fullData = Buffer.concat([
-      //   commandByte,
-      //   pathBuffer,
-      //   separator,
-      //   registerBuffer,
-      //   endMarker,
-      // ]);
-
-      // console.log(
-      //   "Register data being sent to agent:",
-      //   fullData.toString("utf-8")
-      // );
-
       return new Promise((resolve, reject) => {
         client.connect(2512, "127.0.0.1", () => {
           client.write(message);
         });
 
         client.on("data", (data) => {
-          const printable = Array.from(data)
-            .map((byte) =>
-              byte >= 32 && byte <= 126 ? String.fromCharCode(byte) : "."
-            )
-            .join("");
-          console.log("Printable:", printable);
           client.end();
           resolve({ status: "success", response: data.toString() });
         });
@@ -115,11 +115,10 @@ ipcMain.handle("agent-command", async (event, command, args) => {
           client.end();
           resolve({ status: "error", message: err.message });
 
-        client.on('close', () => {
-          console.log('Socket connection closed.');
+          client.on("close", () => {
+            console.log("Socket connection closed.");
+          });
         });
-        });
-
       });
     } catch (err) {
       console.error("Unexpected error:", err);
@@ -200,10 +199,4 @@ ipcMain.handle("agent-command", async (event, command, args) => {
   }
 
   return { status: "error", message: "Unknown command" };
-});
-
-ipcMain.handle("choose-file", async () => {
-  const path = await chooseFile();
-  console.log(path)
-  return path;
 });
