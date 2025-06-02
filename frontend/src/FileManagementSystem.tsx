@@ -490,7 +490,8 @@ const FileManagementSystem = () => {
               if (file.id === fileForPermissionEdit.id) {
                 return {
                   ...file,
-                  sharedWith: finalSharedWith
+                  sharedWith: finalSharedWith,
+                  accessHistory: [...(file.accessHistory || []), newHistoryEntry]
                 };
               }
               return file;
