@@ -1,4 +1,4 @@
 module.exports = {
-  agentHost: "192.168.71.128",
+  agentHost: "127.0.0.1",
   agentPort: 2512,
 };
