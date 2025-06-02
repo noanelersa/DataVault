@@ -56,47 +56,37 @@ const FileManagementSystem = () => {
   
 
   const handleFileUpload = async () => {
-
     try {
-    
       const fileInfo = await window.agentAPI.invoke("choose-file");
 
-      if (fileInfo===null) {
-          setResponseMessage("No file selected or error reading file info.");
-          return;
+      if (fileInfo === null) {
+        setResponseMessage("No file selected or error reading file info.");
+        return;
       }
 
       const filePath = fileInfo.path;
-      const fileName = filePath.split('\\').pop(); 
-      const fileSize = fileInfo.size; 
-      const fileType = fileInfo.type; 
-    
+      const fileName = filePath.split("\\").pop();
+      const fileSize = fileInfo.size;
+      const fileType = fileInfo.type;
+//  shared with shouldnt be transffered if no one ask the user who to share with when uploading a file. should be only at transffered at update permissions.
       const command = {
         path: filePath,
-        sharedWith: [
-          { id: 1, name: "user1", access: "read" }, // still a mock
-          { id: 2, name: "user2", access: "read" },
-        ]
+        sharedWith: [],
       };
       const response = await window.agentAPI.sendCommand("upload", command);
-      // const response = { status: "success" }
       console.log("Agent response:", response);
 
       if (response?.status === "success") {
-        const date= new Date().toISOString().slice(0, 16).replace("T", " ")
+        const date = new Date().toISOString().slice(0, 16).replace("T", " ");
         const newFile = {
           id: files.length + 1,
           name: fileName,
           uploadedBy: "7075ed12", // assuming current user is admin
           uploadDate: date,
           lastAccessed: new Date().toISOString().slice(0, 10),
-          accessCount: 0,
           size: `${fileSize} MB`,
           type: fileType,
-          sharedWith: [
-            { id: 1, name: "user1", access: "read" },
-            { id: 2, name: "user2", access: "read" },
-          ],
+          sharedWith: [],
           accessHistory: [
             {
               user: "7075ed12",
@@ -104,6 +94,7 @@ const FileManagementSystem = () => {
               date: date,
             },
           ],
+          path: filePath,
         };
 
         setFiles((prevFiles) => [...prevFiles, newFile]);
@@ -116,7 +107,6 @@ const FileManagementSystem = () => {
       setResponseMessage("Error sending data.");
     }
   };
-
 
   const FileDropdown = ({ file }) => {
     return (
@@ -224,60 +214,80 @@ const FileManagementSystem = () => {
 
     const handleFileUpdate = async () => {
       if (!fileForPermissionEdit) return;
-
-      const updatedSharedWith = fileForPermissionEdit.sharedWith.map(user => {
-        const updated = editedPermissions.find(u => u.id === user.id);
-        if (updated) {
-          if (updated.access === "none") return null;
-          return { ...user, access: updated.access };
-        }
-        return user;
-        }).filter(user => user !== null);
-
-      const newUsers = editedPermissions.filter(user =>
-            !fileForPermissionEdit.sharedWith.some(
-              sharedUser => sharedUser.id === user.id
-            )
-        ).map(user => ({
-          id: user.id,
-          name: user.name,
-          access: user.access,
-        }));
-
-      const finalSharedWith = [...updatedSharedWith, ...newUsers];
-
       try {
+        const updatedSharedWith = fileForPermissionEdit.sharedWith
+          .map((user) => {
+            const updated = editedPermissions.find((u) => u.id === user.id);
+            if (updated) {
+              if (updated.access === "none") {
+                return null;
+              }
+              return { ...user, access: updated.access };
+            }
+            return user;
+          })
+          .filter((user) => user !== null);
+
+        const newUsers = editedPermissions
+          .filter(
+            (user) =>
+              !fileForPermissionEdit.sharedWith.some(
+                (sharedUser) => sharedUser.id === user.id
+              )
+          )
+          .map((user) => ({
+            id: user.id,
+            name: user.name,
+            access: user.access,
+          }));
+
+        const finalSharedWith = [...updatedSharedWith, ...newUsers];
+
+        const command = {
+          path: fileForPermissionEdit.path,
+          sharedWith: finalSharedWith.map((user) => ({
+            name: user.name,
+            access: user.access,
+          })),
+        };
+
+        console.log("Sending update permissions command to agent:", command);
+
         const response = await window.agentAPI.sendCommand(
           "update-permissions",
-          {
-            name: fileForPermissionEdit.name,
-            sharedWith: finalSharedWith.map((user) => ({
-              name: user.name,
-              access: user.access,
-            })),
-          }
+          command
         );
+        console.log("Agent response for update:", response);
 
-        console.log("Agent response:", response);
+        if (response?.status === "success") {
+          const newHistoryEntry = {
+                user: "7075ed12",
+                action: "permissions updated",
+                date: new Date().toISOString().slice(0, 16).replace("T", " "),
+            };
+
+          setFiles((prevFiles) =>
+            prevFiles.map((file) => {
+              if (file.id === fileForPermissionEdit.id) {
+                return {
+                  ...file,
+                  sharedWith: finalSharedWith
+                };
+              }
+              return file;
+            })
+          );
+          setShowPermissionModal(false);
+          setEditedPermissions([]);
+        } else {
+          console.error(
+            "Agent returned error for permission update:",
+            response?.message
+          );
+        }
       } catch (err) {
-        console.error("Failed to send update command to agent:", err);
+        console.error("Error while sending update permissions command:", err);
       }
-
-      if (response?.status === "success") {
-        setFiles(prevFiles =>
-          prevFiles.map(file => {
-            if (file.id === fileForPermissionEdit.id) {
-              return { ...file, sharedWith: finalSharedWith };
-            }
-            return file;
-          })
-        );
-      
-        setShowPermissionModal(false);
-        setEditedPermissions([]);
-      }
-
-
     };
 
     return (
@@ -446,24 +456,44 @@ const FileManagementSystem = () => {
     </div>
   );
 
-  const handleDeleteFile = async (fileName: string) => {
-    try {
-      const response = await window.agentAPI.sendCommand("delete", {
-        name: fileName,
-      });
-
-      if (response.status === "success") {
-        console.log("File deleted successfully");
-        setFiles((prev) => prev.filter((file) => file.name !== fileName));
-        setFileName("");
-      } else {
-        console.log("Failed to delete file: " + response.message);
-      }
-    } catch (error) {
-      console.error("Error deleting file:", error);
-      alert("Failed to delete file");
+const handleDeleteFile = async (fileId: number) => { 
+    if (typeof fileId === 'undefined' || fileId === null) {
+        console.error("Cannot delete: File ID is missing.");
+        alert("Failed to delete file: ID missing.");
+        return;
     }
-  };
+
+    const fileToDelete = files.find(file => file.id === fileId);
+
+    if (!fileToDelete) {
+        alert(`Failed to delete file: Could not find file in list.`);
+        return;
+    }
+
+    if (!fileToDelete.path) {
+        console.error(`Cannot delete: Path for fileId "${fileId}" is missing in the file object.`);
+        return;
+    }
+
+    try {
+        const command = {
+          path: fileToDelete.path, 
+        };
+
+        const response = await window.agentAPI.sendCommand("delete", command);
+
+        if (response?.status === "success") {
+            setFiles((prev) => prev.filter((file) => file.id !== fileId));
+            alert(`File "${fileToDelete.name}" deleted successfully!`);
+        } else {
+            console.log(`Failed to delete file with ID "${fileId}": ` + (response?.message || "Unknown error from agent."));
+            alert(`Failed to delete file "${fileToDelete.name}": ` + (response?.message || "Please check agent logs."));
+        }
+    } catch (error) {
+        console.error("Error deleting file:", error);
+    }
+};
+
 
 
   const handleDeleteFile = async (fileName) =>{
@@ -490,7 +520,7 @@ const FileManagementSystem = () => {
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Files</h2>
         <div>
-          <Button onClick={handleFileUpload}> 
+          <Button onClick={handleFileUpload}>
             <Upload className="mr-2" size={16} /> Upload New File
           </Button>
         </div>
@@ -528,7 +558,7 @@ const FileManagementSystem = () => {
                   <Button variant="ghost" size="sm" onClick={() => setSelectedFile(file)}>
                     <Info size={16} />
                   </Button>
-                  <Button onClick={() => handleDeleteFile(file.name)}>
+                  <Button onClick={() => handleDeleteFile(file.id)}>
                     <Trash2 size={16} />
                   </Button>
                   <FileDropdown file={file} />
