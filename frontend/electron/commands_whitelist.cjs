@@ -1,1 +1,5 @@
-module.exports = ["upload"];
+module.exports = [
+  "upload",
+  "update-permissions",
+  "delete"
+];
