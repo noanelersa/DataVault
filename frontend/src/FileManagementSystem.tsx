@@ -439,14 +439,14 @@ const FileManagementSystem = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {file.accessHistory.map((access, idx) => (
+              {/*{file.alerts.map((access, idx) => (
                 <div key={idx} className="flex justify-between items-center py-2 border-b">
                   <span className="text-sm">
                     <span className="font-medium">{access.user}</span> {access.action}
                   </span>
                   <span className="text-xs text-gray-500">{access.date}</span>
                 </div>
-              ))}
+              ))}*/}
             </div>
           </CardContent>
         </Card>
