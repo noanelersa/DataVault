@@ -57,21 +57,19 @@ const FileManagementSystem = () => {
   
 
   const handleFileUpload = async () => {
-
     try {
-    
       const fileInfo = await window.agentAPI.invoke("choose-file");
 
-      if (fileInfo===null) {
-          setResponseMessage("No file selected or error reading file info.");
-          return;
+      if (fileInfo === null) {
+        setResponseMessage("No file selected or error reading file info.");
+        return;
       }
 
       const filePath = fileInfo.path;
-      const fileName = filePath.split('\\').pop(); 
-      const fileSize = fileInfo.size; 
-      const fileType = fileInfo.type; 
-    
+      const fileName = filePath.split("\\").pop();
+      const fileSize = fileInfo.size;
+      const fileType = fileInfo.type;
+//  shared with shouldnt be transffered if no one ask the user who to share with when uploading a file. should be only at transffered at update permissions.
       const command = {
         name: file.name,
         uploadedBy: '7075ed12', // assuming current user is admin
@@ -86,24 +84,19 @@ const FileManagementSystem = () => {
         ]
       };
       const response = await window.agentAPI.sendCommand("upload", command);
-      // const response = { status: "success" }
       console.log("Agent response:", response);
 
       if (response?.status === "success") {
-        const date= new Date().toISOString().slice(0, 16).replace("T", " ")
+        const date = new Date().toISOString().slice(0, 16).replace("T", " ");
         const newFile = {
           id: files.length + 1,
           name: fileName,
           uploadedBy: "7075ed12", // assuming current user is admin
           uploadDate: date,
           lastAccessed: new Date().toISOString().slice(0, 10),
-          accessCount: 0,
           size: `${fileSize} MB`,
           type: fileType,
-          sharedWith: [
-            { id: 1, name: "user1", access: "read" },
-            { id: 2, name: "user2", access: "read" },
-          ],
+          sharedWith: [],
           accessHistory: [
             {
               user: "7075ed12",
@@ -111,6 +104,7 @@ const FileManagementSystem = () => {
               date: date,
             },
           ],
+          path: filePath,
         };
 
         setFiles((prevFiles) => [...prevFiles, newFile]);
@@ -126,6 +120,7 @@ const FileManagementSystem = () => {
 <<<<<<< HEAD
 =======
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 >>>>>>> 26f9fed (added the ability to get the path's file dynamiclly in realtime)
   const triggerFileInput = () => {
@@ -205,6 +200,9 @@ const FileManagementSystem = () => {
       setPermissions(permissions.filter(p => p.username !== username));
     };
 
+=======
+  const FileDropdown = ({ file }) => {
+>>>>>>> 8e3eec3 (developed the delete handler through electron)
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-background bg-opacity-20">
         <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[300px] bg-gray-900 text-white shadow-lg rounded-md p-4 z-50">
@@ -393,6 +391,215 @@ const FileManagementSystem = () => {
         )}
       </div>
     );
+<<<<<<< HEAD
+=======
+  };  
+
+  const FilePermissions = ({ fileForPermissionEdit }) => {
+    const [showUserDropdown, setShowUserDropdown] = useState(false); //show users who still have no permissions for the selected file
+    const [selectedUserId, setSelectedUserId] = useState("");
+    const [selectedUserAccess, setSelectedUserAccess] = useState("read");
+
+    const availableUsers = existingUsers.filter(
+      (user) => !fileForPermissionEdit.acl.some((sharedUser) => sharedUser.id === user.id)
+    );
+
+    const addExistingUserToFile = (userId, userAccess) => {
+      const user = existingUsers.find((u) => u.id === parseInt(userId));
+      if (user) {
+        setEditedPermissions((prevPermissions) => {
+          const existingUser = prevPermissions.find((u) => u.id === user.id);
+          if (existingUser) {
+            return prevPermissions.map((u) =>
+              u.id === user.id ? { ...u, access: userAccess } : u
+            );
+          } else {
+            return [
+              ...prevPermissions,
+              { id: user.id, name: user.name, access: userAccess },
+            ];
+          }
+        });
+
+        setFileForPermissionEdit((prev) => {
+          return {
+            ...prev,
+            acl: [...prev.acl, { id: user.id, name: user.name, access: userAccess }]
+          };
+        });
+      }
+      setShowUserDropdown(false);
+    };
+
+    const handleFileUpdate = async () => {
+      if (!fileForPermissionEdit) return;
+      try {
+        const updatedSharedWith = fileForPermissionEdit.sharedWith
+          .map((user) => {
+            const updated = editedPermissions.find((u) => u.id === user.id);
+            if (updated) {
+              if (updated.access === "none") {
+                return null;
+              }
+              return { ...user, access: updated.access };
+            }
+            return user;
+          })
+          .filter((user) => user !== null);
+
+        const newUsers = editedPermissions
+          .filter(
+            (user) =>
+              !fileForPermissionEdit.sharedWith.some(
+                (sharedUser) => sharedUser.id === user.id
+              )
+          )
+          .map((user) => ({
+            id: user.id,
+            name: user.name,
+            access: user.access,
+          }));
+
+        const finalSharedWith = [...updatedSharedWith, ...newUsers];
+
+        const command = {
+          path: fileForPermissionEdit.path,
+          sharedWith: finalSharedWith.map((user) => ({
+            name: user.name,
+            access: user.access,
+          })),
+        };
+
+        console.log("Sending update permissions command to agent:", command);
+
+        const response = await window.agentAPI.sendCommand(
+          "update-permissions",
+          command
+        );
+        console.log("Agent response for update:", response);
+
+        if (response?.status === "success") {
+          const newHistoryEntry = {
+                user: "7075ed12",
+                action: "permissions updated",
+                date: new Date().toISOString().slice(0, 16).replace("T", " "),
+            };
+
+          setFiles((prevFiles) =>
+            prevFiles.map((file) => {
+              if (file.id === fileForPermissionEdit.id) {
+                return {
+                  ...file,
+                  sharedWith: finalSharedWith
+                };
+              }
+              return file;
+            })
+          );
+          setShowPermissionModal(false);
+          setEditedPermissions([]);
+        } else {
+          console.error(
+            "Agent returned error for permission update:",
+            response?.message
+          );
+        }
+      } catch (err) {
+        console.error("Error while sending update permissions command:", err);
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6 text-black">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold">
+              Edit Permissions - {fileForPermissionEdit?.name}
+            </h3>
+          </div>
+
+          <div className="space-y-2 mb-4">
+            {fileForPermissionEdit?.acl.filter(user => {
+                const edited = editedPermissions.find(u => u.id === user.id);
+                return !(edited && edited.access === 'none'); 
+            })
+            .map((user) => (
+              <div key={user.id} className="flex justify-between items-center">
+                <div className="flex items-center gap-1">
+                  <Button className="p-1 hover:text-red-700 text-sm font-bold"
+                  onClick={() => {
+                    setEditedPermissions(prev => {
+                      const exists = prev.find(u => u.id === user.id);
+                      if (exists) {
+                        return prev.map(u =>
+                          u.id === user.id ? { ...u, access: 'none' } : u
+                        );
+                      } else {
+                        return [...prev, { id: user.id, access: 'none' }];
+                      }
+                    });
+                  }}>
+                    ×
+                  </Button>
+                  <span>{user.name}</span>
+                </div>
+              ))}
+          </div>
+  
+         
+          <div className="space-y-2 mb-4 hover:shadow-md">
+            <Button onClick={() => setShowUserDropdown(!showUserDropdown)}>
+              <UserPlus size={16} className="mr-2" />
+              Grant permissions to a new user
+            </Button>
+
+            {showUserDropdown && (
+              <div className="space-y-2">
+                <select
+                  className="border rounded p-1 text-sm"
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  value={selectedUserId}
+                >
+                  <option value="">Select a user to add</option>
+                  {availableUsers.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  className="border rounded p-1 text-sm"
+                  onChange={(e) => setSelectedUserAccess(e.target.value)}
+                  value={selectedUserAccess}
+                >
+                  <option value="read">Read</option>
+                  <option value="write">Write</option>
+                  <option value="manage">Manage</option>
+                </select>
+
+                <Button
+                  onClick={() => {
+                    if (selectedUserId) {
+                      addExistingUserToFile(selectedUserId, selectedUserAccess);
+                      setSelectedUserId("");
+                      setSelectedUserAccess("read");
+                    }
+                  }}
+                >
+                  Add User
+                </Button>
+              </div>
+            )}
+          </div>
+  
+          <div className="flex justify-end hover:shadow-md">
+            <Button onClick={handleFileUpdate}>Save</Button>
+          </div>
+        </div>
+      </div>
+    );
+>>>>>>> 8e3eec3 (developed the delete handler through electron)
   };
 
   const FileInfoView = ({ file, onBack }) => (
@@ -469,24 +676,44 @@ const FileManagementSystem = () => {
     </div>
   );
 
-  const handleDeleteFile = async (fileName: string) => {
-    try {
-      const response = await window.agentAPI.sendCommand("delete", {
-        name: fileName,
-      });
-
-      if (response.status === "success") {
-        console.log("File deleted successfully");
-        setFiles((prev) => prev.filter((file) => file.name !== fileName));
-        setFileName("");
-      } else {
-        console.log("Failed to delete file: " + response.message);
-      }
-    } catch (error) {
-      console.error("Error deleting file:", error);
-      alert("Failed to delete file");
+const handleDeleteFile = async (fileId: number) => { 
+    if (typeof fileId === 'undefined' || fileId === null) {
+        console.error("Cannot delete: File ID is missing.");
+        alert("Failed to delete file: ID missing.");
+        return;
     }
-  };
+
+    const fileToDelete = files.find(file => file.id === fileId);
+
+    if (!fileToDelete) {
+        alert(`Failed to delete file: Could not find file in list.`);
+        return;
+    }
+
+    if (!fileToDelete.path) {
+        console.error(`Cannot delete: Path for fileId "${fileId}" is missing in the file object.`);
+        return;
+    }
+
+    try {
+        const command = {
+          path: fileToDelete.path, 
+        };
+
+        const response = await window.agentAPI.sendCommand("delete", command);
+
+        if (response?.status === "success") {
+            setFiles((prev) => prev.filter((file) => file.id !== fileId));
+            alert(`File "${fileToDelete.name}" deleted successfully!`);
+        } else {
+            console.log(`Failed to delete file with ID "${fileId}": ` + (response?.message || "Unknown error from agent."));
+            alert(`Failed to delete file "${fileToDelete.name}": ` + (response?.message || "Please check agent logs."));
+        }
+    } catch (error) {
+        console.error("Error deleting file:", error);
+    }
+};
+
 
 
   const handleDeleteFile = async (fileId) =>{
@@ -512,7 +739,7 @@ const FileManagementSystem = () => {
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Files</h2>
         <div>
-          <Button onClick={handleFileUpload}> 
+          <Button onClick={handleFileUpload}>
             <Upload className="mr-2" size={16} /> Upload New File
           </Button>
         </div>
@@ -550,8 +777,13 @@ const FileManagementSystem = () => {
                   <Button variant="ghost" size="sm" onClick={() => setSelectedFile(file)}>
                     <Info size={16} />
                   </Button>
+<<<<<<< HEAD
                   <Button onClick = {() =>handleDeleteFile(file.fileId)}>
                     <Trash2 size={16}/>
+=======
+                  <Button onClick={() => handleDeleteFile(file.id)}>
+                    <Trash2 size={16} />
+>>>>>>> 8e3eec3 (developed the delete handler through electron)
                   </Button>
                   <FileDropdown file={file} />
                 </td>
