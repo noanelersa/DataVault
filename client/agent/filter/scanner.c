@@ -1918,15 +1918,21 @@ Return Value:
 
         replyLength = sizeof(SCANNER_REPLY);
 
+        LARGE_INTEGER timeout;
+        timeout.QuadPart = USERSPACE_ACTION_TIMEOUT; // Negative value for relative time, 1 seconds in 100-nanosecond units
+
         status = FltSendMessage(ScannerData.Filter,
             &ScannerData.ClientPort,
             notification,
             sizeof(SCANNER_NOTIFICATION),
             notification,
             &replyLength,
-            NULL);
+            &timeout);
 
-        if (STATUS_SUCCESS == status) {
+        if (status == STATUS_TIMEOUT) {
+            *IsAllowed = NOT_REGISTERED;
+        }
+        else if (STATUS_SUCCESS == status) {
 
             *IsAllowed = ((PSCANNER_REPLY)notification)->AllowAction;
         }
@@ -2034,15 +2040,21 @@ ScannerpUpdateHashInUserMode(
 
         replyLength = sizeof(SCANNER_REPLY);
 
+        LARGE_INTEGER timeout;
+        timeout.QuadPart = USERSPACE_ACTION_TIMEOUT; // Negative value for relative time, 1 seconds in 100-nanosecond units
+
         status = FltSendMessage(ScannerData.Filter,
             &ScannerData.ClientPort,
             notification,
             sizeof(SCANNER_NOTIFICATION),
             notification,
             &replyLength,
-            NULL);
+            &timeout);
 
-        if (STATUS_SUCCESS == status) {
+        if (status == STATUS_TIMEOUT) {
+			retVal = NOT_REGISTERED;
+        }
+        else if (STATUS_SUCCESS == status) {
 
             retVal = ((PSCANNER_REPLY)notification)->AllowAction;
             if (retVal == NOT_ALLOWED) {
