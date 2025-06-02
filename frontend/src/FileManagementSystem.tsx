@@ -110,19 +110,6 @@ const FileManagementSystem = () => {
 
   const FileDropdown = ({ file }) => {
     return (
-      <div className="relative" onClick={(e) => e.stopPropagation()}>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() =>
-            setActiveDropdown(activeDropdown === file.id ? null : file.id)
-          }
-        >
-          <MoreVertical size={16} />
-        </Button>
-
-  const FileDropdown = ({ file }) => {
-    return (
       <div className="relative" onClick={e => e.stopPropagation()}>
         <Button 
           variant="ghost" 
@@ -325,6 +312,7 @@ const FileManagementSystem = () => {
                   </Button>
                   <span>{user.name}</span>
                 </div>
+              </div>
               ))}
           </div>
   
@@ -457,64 +445,43 @@ const FileManagementSystem = () => {
     </div>
   );
 
-const handleDeleteFile = async (fileId: number) => { 
-    if (typeof fileId === 'undefined' || fileId === null) {
-        console.error("Cannot delete: File ID is missing.");
-        alert("Failed to delete file: ID missing.");
-        return;
-    }
-
-    const fileToDelete = files.find(file => file.id === fileId);
-
-    if (!fileToDelete) {
-        alert(`Failed to delete file: Could not find file in list.`);
-        return;
-    }
-
-    if (!fileToDelete.path) {
-        console.error(`Cannot delete: Path for fileId "${fileId}" is missing in the file object.`);
-        return;
-    }
-
-    try {
-        const command = {
-          path: fileToDelete.path, 
-        };
-
-        const response = await window.agentAPI.sendCommand("delete", command);
-
-        if (response?.status === "success") {
-            setFiles((prev) => prev.filter((file) => file.id !== fileId));
-            alert(`File "${fileToDelete.name}" deleted successfully!`);
-        } else {
-            console.log(`Failed to delete file with ID "${fileId}": ` + (response?.message || "Unknown error from agent."));
-            alert(`Failed to delete file "${fileToDelete.name}": ` + (response?.message || "Please check agent logs."));
-        }
-    } catch (error) {
-        console.error("Error deleting file:", error);
-    }
-};
-
-
-
-  const handleDeleteFile = async (fileName) =>{
-    try {
-      const response = await fetch(`http://localhost:2513/delete/${fileName}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-  
-      if (response.ok) {
-        console.log("File deleted successfully");
-        setFiles(prev => prev.filter(file => file.name !== fileName));
-      } else {
-        console.error("Failed to delete file");
+  const handleDeleteFile = async (fileId: number) => { 
+      if (typeof fileId === 'undefined' || fileId === null) {
+          console.error("Cannot delete: File ID is missing.");
+          alert("Failed to delete file: ID missing.");
+          return;
       }
-    } catch (err) {
-      console.error("Error deleting file:", err);
-    }
-  };
 
+      const fileToDelete = files.find(file => file.id === fileId);
+
+      if (!fileToDelete) {
+          alert(`Failed to delete file: Could not find file in list.`);
+          return;
+      }
+
+      if (!fileToDelete.path) {
+          console.error(`Cannot delete: Path for fileId "${fileId}" is missing in the file object.`);
+          return;
+      }
+
+      try {
+          const command = {
+            path: fileToDelete.path, 
+          };
+
+          const response = await window.agentAPI.sendCommand("delete", command);
+
+          if (response?.status === "success") {
+              setFiles((prev) => prev.filter((file) => file.id !== fileId));
+              alert(`File "${fileToDelete.name}" deleted successfully!`);
+          } else {
+              console.log(`Failed to delete file with ID "${fileId}": ` + (response?.message || "Unknown error from agent."));
+              alert(`Failed to delete file "${fileToDelete.name}": ` + (response?.message || "Please check agent logs."));
+          }
+      } catch (error) {
+          console.error("Error deleting file:", error);
+      }
+  };
 
   const renderFiles = () => (
     <div className="space-y-4">
@@ -571,6 +538,28 @@ const handleDeleteFile = async (fileId: number) => {
       </div>
     </div>
   );
+
+  const getMyAlerts = () => {
+      fetch(`http://localhost:2513/alerts/user/${localStorage.getItem("userId")}`, {
+        method: 'GET', 
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          alerts = data
+          console.log('Response:', data);
+        })
+        .catch((error) => {
+          console.error('Error:', error);
+          setResponseMessage('Error sending data');
+        });
+    };
+
+  const triggerFileInput = () => {
+    fileInputRef.current.click();
+  };
 
   const renderAlerts = () => (
     <div className="space-y-4">
