@@ -33,11 +33,22 @@ const FileManagementSystem = () => {
   useEffect(() => {
     const fetchFiles = async () => {
       try {
-        const response = await axios.get('http://193.106.55.113:8080/file'); 
-        console.log("Server response:", response.data); 
-        setFiles(response.data);
-      } catch (error) {
-        console.error('Error fetching files:', error); 
+        const response = await fetch(`/api/file/shared/${localStorage.getItem("userId")}`, {
+          method: 'GET', // or 'POST', 'PUT', etc.
+          headers: {
+            'Content-Type': 'application/json',
+            // Add any other headers if needed
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+        const json = await response.json();
+        setFiles(json);
+      } catch (err: any) {
+        throw new Error(`HTTP error! Status: ${err}`);
       }
     };
   
@@ -60,7 +71,7 @@ const FileManagementSystem = () => {
         accessCount: 0,
         size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
         type: file.type || 'Unknown',
-        sharedWith: [{ id: 1, name: 'user1', access: 'read' },{ id: 2, name: 'user2', access: 'read' }],
+        acl: [{ id: 1, name: 'user1', access: 'read' },{ id: 2, name: 'user2', access: 'read' }],
         accessHistory: [
           { user: '7075ed12', action: 'uploaded', date: new Date().toISOString().slice(0, 16).replace('T', ' ') }
         ]
@@ -136,9 +147,9 @@ const FileManagementSystem = () => {
                     <UserPlus size={14} />
                   </Button>
                 </div>
-                {file.sharedWith.map(user => (
-                  <div key={user.id} className="flex items-center justify-between py-1">
-                    <span>{user.name}</span>
+                {file.acl.map(user => (
+                  <div key={user.username} className="flex items-center justify-between py-1">
+                    <span>{user.username}</span>
                     <span className="text-xs text-gray-500">{user.access}</span>
                   </div>
                 ))}
@@ -172,7 +183,7 @@ const FileManagementSystem = () => {
     const [selectedUserAccess, setSelectedUserAccess] = useState('read'); 
   
     const availableUsers = existingUsers.filter(
-      (user) => !fileForPermissionEdit.sharedWith.some((sharedUser) => sharedUser.id === user.id)
+      (user) => !fileForPermissionEdit.acl.some((sharedUser) => sharedUser.id === user.id)
     );
   
     const addExistingUserToFile = (userId, userAccess) => {
@@ -192,7 +203,7 @@ const FileManagementSystem = () => {
         setFileForPermissionEdit(prev => {
           return {
             ...prev,
-            sharedWith: [...prev.sharedWith, { id: user.id, name: user.name, access: userAccess }]
+            acl: [...prev.acl, { id: user.id, name: user.name, access: userAccess }]
           };
         });
       }
@@ -202,7 +213,7 @@ const FileManagementSystem = () => {
     const handleFileUpdate = () => {
       if (!fileForPermissionEdit) return;
     
-        const updatedSharedWith = fileForPermissionEdit.sharedWith.map(user => {
+        const updatedSharedWith = fileForPermissionEdit.acl.map(user => {
         const updated = editedPermissions.find(u => u.id === user.id);
         if (updated) {
           if (updated.access === 'none') { //remove user with 'none' permissions
@@ -214,7 +225,7 @@ const FileManagementSystem = () => {
       }).filter(user => user !== null); 
     
       const newUsers = editedPermissions.filter(user =>
-        !fileForPermissionEdit.sharedWith.some(sharedUser => sharedUser.id === user.id)
+        !fileForPermissionEdit.acl.some(sharedUser => sharedUser.id === user.id)
       ).map(user => ({
         id: user.id,
         name: user.name,
@@ -231,7 +242,7 @@ const FileManagementSystem = () => {
         credentials: 'include',
         body: JSON.stringify({
           name: fileForPermissionEdit.name,
-          sharedWith: finalSharedWith.map(user => ({
+          acl: finalSharedWith.map(user => ({
             name: user.name,
             access: user.access
           })),
@@ -244,7 +255,7 @@ const FileManagementSystem = () => {
       setFiles(prevFiles =>
         prevFiles.map(file => {
           if (file.id === fileForPermissionEdit.id) {
-            return { ...file, sharedWith: finalSharedWith };
+            return { ...file, acl: finalSharedWith };
           }
           return file;
         })
@@ -266,7 +277,7 @@ const FileManagementSystem = () => {
           </div>
   
           <div className="space-y-2 mb-4">
-            {fileForPermissionEdit?.sharedWith.filter(user => {
+            {fileForPermissionEdit?.acl.filter(user => {
                 const edited = editedPermissions.find(u => u.id === user.id);
                 return !(edited && edited.access === 'none'); 
             })
@@ -376,7 +387,7 @@ const FileManagementSystem = () => {
         <Button variant="ghost" onClick={onBack}>
           <ArrowLeft size={16} className="mr-2" /> Back to Files
         </Button>
-        <h2 className="text-2xl font-bold">{file.name}</h2>
+        <h2 className="text-2xl font-bold">{file.originalFileName.split('\\').pop()}</h2>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -387,24 +398,20 @@ const FileManagementSystem = () => {
           <CardContent>
             <dl className="space-y-2">
               <div className="flex justify-between">
-                <dt className="text-sm font-medium text-gray-500">Type</dt>
-                <dd className="text-sm text-gray-900">{file.type}</dd>
+                <dt className="text-sm font-medium text-white-500">Type</dt>
+                <dd className="text-sm text-white-900">{file.originalFileName.split('\\').pop().split('.').pop()}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-sm font-medium text-gray-500">Size</dt>
-                <dd className="text-sm text-gray-900">{file.size}</dd>
+                <dt className="text-sm font-medium text-white-500">Size</dt>
+                <dd className="text-sm text-white-900">{file.size}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-sm font-medium text-gray-500">Uploaded by</dt>
-                <dd className="text-sm text-gray-900">{file.uploadedBy}</dd>
+                <dt className="text-sm font-medium text-white-500">Uploaded by</dt>
+                <dd className="text-sm text-white-900">{file.owner}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-sm font-medium text-gray-500">Upload date</dt>
-                <dd className="text-sm text-gray-900">{file.uploadDate}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-sm font-medium text-gray-500">Last accessed</dt>
-                <dd className="text-sm text-gray-900">{file.lastAccessed}</dd>
+                <dt className="text-sm font-medium text-white-500">Upload date</dt>
+                <dd className="text-sm text-white-900">{file.uploadTime.split(' ')[0]}</dd>
               </div>
             </dl>
           </CardContent>
@@ -416,10 +423,10 @@ const FileManagementSystem = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {file.sharedWith.map(user => (
-                <div key={user.id} className="flex justify-between items-center py-2 border-b">
-                  <span className="text-sm font-medium">{user.name}</span>
-                  <span className="text-xs bg-gray-100 px-2 py-1 rounded">{user.access}</span>
+              {file.acl.map(user => (
+                <div key={user.username} className="flex justify-between items-center py-2 border-b">
+                  <span className="text-sm font-medium">{user.username}</span>
+                  <span className="text-xs bg-black-100 px-2 py-1 rounded">{user.access}</span>
                 </div>
               ))}
             </div>
@@ -432,14 +439,14 @@ const FileManagementSystem = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {file.accessHistory.map((access, idx) => (
+              {/*{file.alerts.map((access, idx) => (
                 <div key={idx} className="flex justify-between items-center py-2 border-b">
                   <span className="text-sm">
                     <span className="font-medium">{access.user}</span> {access.action}
                   </span>
                   <span className="text-xs text-gray-500">{access.date}</span>
                 </div>
-              ))}
+              ))}*/}
             </div>
           </CardContent>
         </Card>
@@ -489,20 +496,30 @@ const FileManagementSystem = () => {
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Name</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Uploaded By</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Last Accessed</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Access Count</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Uploaded Time</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">File Hash</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-transparent divide-y divide-gray-600">
             {files.map(file => (
-              <tr key={file.id} className="hover:bg-gray-800/30">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{file.name}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.uploadedBy}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.lastAccessed}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.accessCount}</td>
+              <tr key={file.fileId} className="hover:bg-gray-800/30">
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{file.originalFileName.split('\\').pop()}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.owner}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.uploadTime.split(' ')[0]}</td>
+                <td
+                  className="relative px-6 py-4 whitespace-nowrap text-sm text-white cursor-pointer group"
+                  onClick={() => navigator.clipboard.writeText(file.originalFileHash)}
+                >
+                  {file.originalFileHash.slice(0, 8)}...
+
+                  {/* Tooltip */}
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-10">
+                    Click to copy
+                  </div>
+                </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm flex items-center space-x-2">
-                  <Button variant="ghost" size="sm"><Download size={16} /></Button>
+                  {/* <Button variant="ghost" size="sm"><Download size={16} /></Button> */}
                   <Button variant="ghost" size="sm" onClick={() => setSelectedFile(file)}>
                     <Info size={16} />
                   </Button>

@@ -54,7 +54,7 @@ def require_auth(f):
 @require_auth
 def register():
     newFile = request.json
-    register_data = serialize_acl(newFile['sharedWith'])
+    register_data = serialize_acl(newFile['acl'])
     token = request.cookies.get("auth_token")
 
     try:
@@ -73,7 +73,7 @@ def update_permissions():
     file_data = request.json
 
     try:
-        register_data = serialize_acl(file_data['sharedWith'])  
+        register_data = serialize_acl(file_data['acl'])  
         token = request.cookies.get("auth_token")
 
         register_data = AgentActionType.UPDATE_PERMISSIONS.value.to_bytes(1,byteorder='big') + f"{BASE_PATH}{file_data['name']}$token={token}$".encode() + register_data.encode() + b"$"
