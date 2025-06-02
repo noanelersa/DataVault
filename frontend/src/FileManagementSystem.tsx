@@ -544,6 +544,7 @@ const FileManagementSystem = () => {
                   </Button>
                   <span>{user.name}</span>
                 </div>
+              </div>
               ))}
           </div>
   
@@ -677,31 +678,31 @@ const FileManagementSystem = () => {
     </div>
   );
 
-const handleDeleteFile = async (fileId: number) => { 
-    if (typeof fileId === 'undefined' || fileId === null) {
-        console.error("Cannot delete: File ID is missing.");
-        alert("Failed to delete file: ID missing.");
-        return;
-    }
+  const handleDeleteFile = async (fileId: number) => { 
+      if (typeof fileId === 'undefined' || fileId === null) {
+          console.error("Cannot delete: File ID is missing.");
+          alert("Failed to delete file: ID missing.");
+          return;
+      }
 
-    const fileToDelete = files.find(file => file.id === fileId);
+      const fileToDelete = files.find(file => file.id === fileId);
 
-    if (!fileToDelete) {
-        alert(`Failed to delete file: Could not find file in list.`);
-        return;
-    }
+      if (!fileToDelete) {
+          alert(`Failed to delete file: Could not find file in list.`);
+          return;
+      }
 
-    if (!fileToDelete.path) {
-        console.error(`Cannot delete: Path for fileId "${fileId}" is missing in the file object.`);
-        return;
-    }
+      if (!fileToDelete.path) {
+          console.error(`Cannot delete: Path for fileId "${fileId}" is missing in the file object.`);
+          return;
+      }
 
-    try {
-        const command = {
-          path: fileToDelete.path, 
-        };
+      try {
+          const command = {
+            path: fileToDelete.path, 
+          };
 
-        const response = await window.agentAPI.sendCommand("delete", command);
+          const response = await window.agentAPI.sendCommand("delete", command);
 
         if (response?.status === "success") {
             setFiles((prev) => prev.filter((file) => file.id !== fileId));
@@ -717,16 +718,16 @@ const handleDeleteFile = async (fileId: number) => {
 
 
 
-  const handleDeleteFile = async (fileId) =>{
+  const handleDeleteFile = async (fileName) =>{
     try {
-      const response = await fetch(`/api/file/${fileId}`, {
+      const response = await fetch(`http://localhost:2513/delete/${fileName}`, {
         method: 'DELETE',
         credentials: 'include',
       });
   
       if (response.ok) {
         console.log("File deleted successfully");
-        setFiles(prev => prev.filter(file => file.name !== fileId));
+        setFiles(prev => prev.filter(file => file.name !== fileName));
       } else {
         console.error("Failed to delete file");
       }
@@ -734,6 +735,7 @@ const handleDeleteFile = async (fileId: number) => {
       console.error("Error deleting file:", err);
     }
   };
+
 
   const renderFiles = () => (
     <div className="space-y-4">
@@ -792,43 +794,6 @@ const handleDeleteFile = async (fileId: number) => {
             ))}
           </tbody>
         </table>
-      </div>
-    </div>
-  );
-
-  const getMyAlerts = () => {
-    fetch(`/api/alerts`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        const userId = localStorage.getItem("userId");
-        const filteredData = data.filter(item => item.file.owner.username === userId);
-        setAlerts(filteredData);
-      })
-      .catch((error) => {
-        setResponseMessage('Error sending data');
-      });
-  };
-  const renderAlertDetails = () => (
-    <div className="space-y-4">
-      <Button variant="ghost" onClick={() => setSelectedAlert(null)}>
-        <ArrowLeft className="mr-2" size={16} />
-        Back to Alerts
-      </Button>
-
-      <h2 className="text-2xl font-bold">Alert #{selectedAlert.alertId} Details</h2>
-
-      <div className="p-4 border rounded bg-transparent space-y-2">
-        <p><strong>Message:</strong> {selectedAlert.message.replace("user", selectedAlert.user.username)}</p>
-        <p><strong>User:</strong> {selectedAlert.user.username}</p>
-        <p><strong>Action:</strong> {selectedAlert.action}</p>
-        <p><strong>Severity:</strong> {selectedAlert.severity}</p>
-        <p><strong>Created At:</strong> {selectedAlert.createdAt.replace('T',' - ').split('.')[0]}</p>
-        <p><strong>File:</strong> {selectedAlert.file.fileName.split("\\").pop()}</p>
       </div>
     </div>
   );
