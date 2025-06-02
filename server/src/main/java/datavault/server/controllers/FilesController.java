@@ -40,6 +40,11 @@ public class FilesController {
         return ResponseEntity.ok(filesService.getAllByUsername(username));
     }
 
+    @GetMapping("/shared/{username}")
+    public ResponseEntity<List<FileGetDTO>> getAllMyFiles(@PathVariable("username") String username) {
+        return ResponseEntity.ok(filesService.getMyAvailableFiles(username));
+    }
+
     @DeleteMapping("/{fileId}")
     public ResponseEntity<?> removeFile(@PathVariable("fileId") String fileId) {
         filesService.removeFile(fileId);

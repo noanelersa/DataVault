@@ -5,6 +5,7 @@ import datavault.server.dto.AclDTO;
 import datavault.server.dto.FileGetDTO;
 import datavault.server.dto.FilePostDTO;
 import datavault.server.dto.FilePutDTO;
+import datavault.server.entities.AclEntity;
 import datavault.server.entities.FileEntity;
 import datavault.server.entities.HashEntity;
 import datavault.server.entities.UserEntity;
@@ -16,15 +17,13 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 
 @Service
 public class FilesService {
 
     @Autowired
     private FileRepository fileRepository;
-
-    @Autowired
-    private HashService hashService;
 
     @Autowired
     private HashService hashService;
@@ -70,11 +69,11 @@ public class FilesService {
         UserEntity user = usersService.getUser(filePutDTO.username());
         aclService.checkViolation(file, user, Action.WRITE);
 
-        if (hashService.isHashAlreadyExistsForFile(file.get(), filePutDTO.newHash())) {
+        if (hashService.isHashAlreadyExistsForFile(file, filePutDTO.newHash())) {
             return;
         }
 
-        hashService.saveUpdatedHash(file.get(), filePutDTO.newHash());
+        hashService.saveUpdatedHash(file, filePutDTO.newHash());
     }
 
     public List<FileGetDTO> getAll() {
@@ -91,8 +90,9 @@ public class FilesService {
 
     private FileGetDTO convertFileEntityToGetDto(FileEntity file) {
         HashEntity hash = hashService.findOriginalFileHash(file);
+        List<AclDTO> aclDTOS = aclService.getAllAclDTOForFile(file);
         return new FileGetDTO(file.getFileId(), file.getFileName(), hash.getHash(),
-                hash.getTimestamp().toString(), file.getOwner().getUsername());
+                hash.getTimestamp().toString(), file.getOwner().getUsername(), aclDTOS);
     }
 
     public List<FileGetDTO> getAllByUsername(String username) {
@@ -118,5 +118,14 @@ public class FilesService {
         hashService.deleteAllByFileEntity(file);
         aclService.deleteAllByFileEntity(file);
         fileRepository.delete(file);
+    }
+
+    public List<FileGetDTO> getMyAvailableFiles(String username) {
+        UserEntity user = usersService.getUser(username);
+        List<AclEntity> userAcls = aclService.getAllAclForUser(user);
+
+        return userAcls.stream().map(aclEntity -> {
+            return convertFileEntityToGetDto(aclEntity.getFile());
+        }).toList();
     }
 }
