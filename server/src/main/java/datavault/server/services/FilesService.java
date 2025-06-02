@@ -1,14 +1,8 @@
 package datavault.server.services;
 
 import datavault.server.Repository.FileRepository;
-import datavault.server.dto.AclDTO;
-import datavault.server.dto.FileGetDTO;
-import datavault.server.dto.FilePostDTO;
-import datavault.server.dto.FilePutDTO;
-import datavault.server.entities.AclEntity;
-import datavault.server.entities.FileEntity;
-import datavault.server.entities.HashEntity;
-import datavault.server.entities.UserEntity;
+import datavault.server.dto.*;
+import datavault.server.entities.*;
 import datavault.server.enums.Action;
 import datavault.server.exceptions.FileAlreadyExistsException;
 import datavault.server.exceptions.NoSuchFileException;
@@ -33,6 +27,9 @@ public class FilesService {
 
     @Autowired
     private AclService aclService;
+
+    @Autowired
+    private AlertService alertService;
 
     public String newFile(FilePostDTO filePostDTO) {
         if (hashService.existsByHash(filePostDTO.fileHash())) {
@@ -82,17 +79,23 @@ public class FilesService {
         List<FileGetDTO> dtos = new ArrayList<>();
 
         for (FileEntity file: files) {
-            dtos.add(convertFileEntityToGetDto(file));
+            dtos.add(convertFileEntityToGetDto(file, true));
         }
 
         return dtos;
     }
 
-    private FileGetDTO convertFileEntityToGetDto(FileEntity file) {
+    private FileGetDTO convertFileEntityToGetDto(FileEntity file, Boolean addAlerts) {
         HashEntity hash = hashService.findOriginalFileHash(file);
         List<AclDTO> aclDTOS = aclService.getAllAclDTOForFile(file);
+
+        if (addAlerts) {
+            List<AlertDTO> alertEntities = alertService.getAlertsDtoForFile(file);
+            return new FileGetDTO(file.getFileId(), file.getFileName(), hash.getHash(),
+                    hash.getTimestamp().toString(), file.getOwner().getUsername(), aclDTOS, alertEntities);
+        }
         return new FileGetDTO(file.getFileId(), file.getFileName(), hash.getHash(),
-                hash.getTimestamp().toString(), file.getOwner().getUsername(), aclDTOS);
+                hash.getTimestamp().toString(), file.getOwner().getUsername(), aclDTOS, null);
     }
 
     public List<FileGetDTO> getAllByUsername(String username) {
@@ -102,7 +105,7 @@ public class FilesService {
         List<FileGetDTO> dtos = new ArrayList<>();
 
         for (FileEntity file: files) {
-            dtos.add(convertFileEntityToGetDto(file));
+            dtos.add(convertFileEntityToGetDto(file, true));
         }
 
         return dtos;
@@ -125,7 +128,7 @@ public class FilesService {
         List<AclEntity> userAcls = aclService.getAllAclForUser(user);
 
         return userAcls.stream().map(aclEntity -> {
-            return convertFileEntityToGetDto(aclEntity.getFile());
+            return convertFileEntityToGetDto(aclEntity.getFile(), false);
         }).toList();
     }
 }
