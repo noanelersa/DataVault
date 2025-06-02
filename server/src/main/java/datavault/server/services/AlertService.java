@@ -2,6 +2,7 @@ package datavault.server.services;
 
 import datavault.server.Repository.AlertRepository;
 import datavault.server.Repository.FileRepository;
+import datavault.server.dto.AlertDTO;
 import datavault.server.entities.AlertEntity;
 import datavault.server.entities.FileEntity;
 import datavault.server.entities.UserEntity;
@@ -48,5 +49,11 @@ public class AlertService {
         FileEntity file = fileRepository.findById(fileId)
                 .orElseThrow(() -> new RuntimeException("File not found with id: " + fileId));
         return alertRepository.findByFile(file);
+    }
+
+    public List<AlertDTO> getAlertsDtoForFile(FileEntity file) {
+        return alertRepository.findByFile(file).stream().map(alertEntity -> {
+            return new AlertDTO(alertEntity.getUser().getUsername(), alertEntity.getAction());
+        }).toList();
     }
 }

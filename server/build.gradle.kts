@@ -54,7 +54,7 @@ tasks.register("dockerize", Exec::class) {
 	group = "docker"
 
 	executable = "docker"
-	args = listOf("build", "-t", "jerichowalls/server:3.1.0", ".")
+	args = listOf("build", "-t", "jerichowalls/server:3.2.0", ".")
 }
 
 tasks.register("buildAndPush", Exec::class) {
@@ -62,5 +62,5 @@ tasks.register("buildAndPush", Exec::class) {
 	group = "docker"
 
 	executable = "docker"
-	args = listOf("push", "jerichowalls/server:3.1.0")
+	args = listOf("push", "jerichowalls/server:3.2.0")
 }
