@@ -4,6 +4,9 @@ const net = require("net");
 const { dialog } = require("electron");
 const fs = require("fs").promises;
 const mime = require("mime-types");
+const Config = require('./config.cjs');
+const commandWhitelist = require('./commands_whitelist.cjs');
+
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -62,61 +65,116 @@ function serializeACL(aclList) {
     .join("|");
 }
 
-// async function sendToAgentCommand(commandType, filePathFromArgs, sharedWithList) {
-//   const transformedFilePath = filePathFromArgs.replaceAll("\\", "\\\\\\\\");
-//   console.log(transformedFilePath);
+function sendToAgent(message, commandName = "unknown_command") {
+  return new Promise((resolve, reject) => {
+    const client = new net.Socket();
+    let responseReceivedAndProcessed = false;
+    let receivedDataBuffer = Buffer.alloc(0);
 
-//   const client = new net.Socket();
-//   let registerData = "";
-//   registerData = serializeACL(sharedWith);
+    const responseTimeout = setTimeout(() => {
+      if (!responseReceivedAndProcessed) {
+        console.error(
+          `Agent response timeout for command '${commandName}'. Destroying socket.`
+        );
+        client.destroy();
+        reject({
+          status: "error",
+          message: `Agent response timed out for '${commandName}'.`,
+        });
+      }
+    }, 5000);
 
-//   if (registerData.endsWith("|")) {
-//     registerData = registerData.slice(0, -1);
-//   }
-//   const commandByte = Buffer.from([0x01]);
-//   const filePath = Buffer.from(transformedFilePath, "utf-8");
-//   const acl = Buffer.from(registerData, "utf-8");
-//   const separator = Buffer.from("$", "utf-8");
+    client.connect(Config.agentPort, Config.agentHost, () => {
+      client.write(message);
+    });
 
-//   const message = Buffer.concat([
-//     commandByte,
-//     filePath,
-//     separator,
-//     acl,
-//     separator,
-//   ]);
+    client.on("data", (data) => {
+      receivedDataBuffer = Buffer.concat([receivedDataBuffer, data]);
 
-//   console.log(
-//     "Register data being sent to agent:",
-//     message.toString("utf-8")
-//   );
+      if (receivedDataBuffer.length >= 1) {
+        clearTimeout(responseTimeout);
+        if (!responseReceivedAndProcessed) {
+          responseReceivedAndProcessed = true;
 
-//   return new Promise((resolve) => {
-//         client.connect(2512, "127.0.0.1", () => {
-//           client.write(message);
-//         });
+          const responseByte = receivedDataBuffer.readUInt8(0);
 
-//         client.on("data", (data) => {
-//           receivedDataBuffer = Buffer.concat([receivedDataBuffer, data]);
-//           const responseByte = receivedDataBuffer.readUInt8(0);
-//           if (responseByte === 0x00) { // Assuming 0x00 from agent means success
-//             console.log("Agent responded with success (0x00).");
-//             client.end();
-//             resolve({ status: "success", response: data.toString() });
-//           }
-//         });
+          if (responseByte === 0x00) {
+            console.log(
+              `Agent responded with success (0x00) for '${commandName}'.`
+            );
+            client.end();
+            resolve({ status: "success", message: "OK" });
+          } else {
+            console.warn(
+              `Agent responded with failure (0x${responseByte.toString(
+                16
+              )}) for '${commandName}'.`
+            );
+            client.end();
+            resolve({
+              status: "error",
+              message: `Agent indicated failure: 0x${responseByte.toString(
+                16
+              )}`,
+            });
+          }
+        }
+      }
+    });
 
-//         client.on("error", (err) => {
-//           console.warn(`Agent responded with failure (0x${responseByte.toString(16)}).`);
-//           client.end();
-//           resolve({ status: "error", message: err.message });
+    client.on("error", (err) => {
+      clearTimeout(responseTimeout);
+      if (!responseReceivedAndProcessed) {
+        responseReceivedAndProcessed = true;
+        console.error(`Socket error for command '${commandName}':`, err);
+        client.destroy();
+        reject({ status: "error", message: err.message });
+      }
+    });
 
-//           client.on("close", () => {
-//             console.log("Socket connection closed.");
-//           });
-//         });
-//       });
-// }
+    client.on("end", () => {
+      if (!responseReceivedAndProcessed) {
+        responseReceivedAndProcessed = true;
+        client.destroy();
+        reject({
+          status: "error",
+          message: `Agent closed connection unexpectedly early for '${commandName}'.`,
+        });
+      }
+    });
+
+    client.on("close", (hadError) => {
+      console.log(
+        `Socket connection for '${commandName}' closed. hadError:`,
+        hadError
+      );
+    });
+  });
+}
+
+
+function messageCreation(agentActionType, path, registerData = null) {
+  const commandByte = Buffer.from([agentActionType]);
+  const filePathBuffer = Buffer.from(path, "utf-8");
+  const separator = Buffer.from("$", "utf-8");
+  let message;
+
+  if (registerData === null) {
+    message = Buffer.concat([commandByte, filePathBuffer, separator]);
+  } else {
+    const acl = Buffer.from(registerData, "utf-8");
+    message = Buffer.concat([
+      commandByte,
+      filePathBuffer,
+      separator,
+      acl,
+      separator,
+    ]);
+  }
+  console.log("data being sent to agent:", message.toString("utf-8"));
+  return message;
+}
+
 
 ipcMain.handle("choose-file", async () => {
   const fileInfo = await chooseFile();
@@ -124,10 +182,15 @@ ipcMain.handle("choose-file", async () => {
   return fileInfo;
 });
 
+
 ipcMain.handle("agent-command", async (event, command, args) => {
-  if (!args || typeof args !== "object") {
+  if (!args) {
     console.error("Invalid arguments for agent-command:", args);
     return { status: "error", message: "Invalid arguments provided." };
+  }
+    if (!commandWhitelist.includes(command)) {
+    console.error(`SECURITY VIOLATION: Unauthorized command received: '${command}'.`);
+    return { status: "error", message: `Unauthorized command: '${command}'.` };
   }
   console.log(`Received command from frontend: ${command}`);
 
@@ -139,53 +202,19 @@ ipcMain.handle("agent-command", async (event, command, args) => {
     console.log("Received args:", args);
 
     try {
-      const client = new net.Socket();
       let registerData = "";
       registerData = serializeACL(sharedWith);
 
       if (registerData.endsWith("|")) {
         registerData = registerData.slice(0, -1);
       }
-      const commandByte = Buffer.from([AgentActionType.UPLOAD_FILE]);
-      const filePath = Buffer.from(transformedFilePath, "utf-8");
-      const acl = Buffer.from(registerData, "utf-8");
-      const separator = Buffer.from("$", "utf-8");
-
-      const message = Buffer.concat([
-        commandByte,
-        filePath,
-        separator,
-        acl,
-        separator,
-      ]);
-
-      console.log(
-        "Register data being sent to agent:",
-        message.toString("utf-8")
+      message = messageCreation(
+        AgentActionType.UPLOAD_FILE,
+        transformedFilePath,
+        registerData
       );
-
       // return {status: "success"};
-
-      return new Promise((resolve, reject) => {
-        client.connect(2512, "127.0.0.1", () => {
-          client.write(message);
-        });
-
-        client.on("data", (data) => {
-          client.end();
-          resolve({ status: "success", response: data.toString() });
-        });
-
-        client.on("error", (err) => {
-          console.error("Socket error:", err);
-          client.end();
-          resolve({ status: "error", message: err.message });
-
-          client.on("close", () => {
-            console.log("Socket connection closed.");
-          });
-        });
-      });
+      return sendToAgent(message, "upload");
     } catch (err) {
       console.error("Unexpected error:", err);
       return { status: "error", message: "Unexpected error" };
@@ -198,100 +227,35 @@ ipcMain.handle("agent-command", async (event, command, args) => {
     console.log("Received args:", args);
 
     try {
-      const client = new net.Socket();
       let registerData = "";
       registerData = serializeACL(sharedWith);
 
       if (registerData.endsWith("|")) {
         registerData = registerData.slice(0, -1);
       }
-      const commandByte = Buffer.from([AgentActionType.UPDATE_PERMISSIONS]);
-      const filePath = Buffer.from(transformedFilePath, "utf-8");
-      const acl = Buffer.from(registerData, "utf-8");
-      const separator = Buffer.from("$", "utf-8");
 
-      const message = Buffer.concat([
-        commandByte,
-        filePath,
-        separator,
-        acl,
-        separator,
-      ]);
-
-      console.log(
-        "Register data being sent to agent:",
-        message.toString("utf-8")
+      message = messageCreation(
+        AgentActionType.UPDATE_PERMISSIONS,
+        transformedFilePath,
+        registerData
       );
-
       // return {status: "success"};
-
-      return new Promise((resolve, reject) => {
-        client.connect(2512, "127.0.0.1", () => {
-          client.write(message);
-        });
-
-        client.on("data", (data) => {
-          client.end();
-          resolve({ status: "success", response: data.toString() });
-        });
-
-        client.on("error", (err) => {
-          console.error("Socket error:", err);
-          client.end();
-          resolve({ status: "error", message: err.message });
-
-          client.on("close", () => {
-            console.log("Socket connection closed.");
-          });
-        });
-      });
+      return sendToAgent(message, "update-permissions");
     } catch (err) {
       console.error("Unexpected error:", err);
       return { status: "error", message: "Unexpected error" };
     }
   } else if (command === "delete" && args) {
     const { path } = args;
-    console.log("Delete Path:", path);
-    //transformedFilePath
-    const transformedFilePath = path.replaceAll("\\", "\\\\\\\\");
-    console.log("Transformed Delete Path:", transformedFilePath);
     console.log("Received Delete Args:", args);
+    const transformedFilePath = path.replaceAll("\\", "\\\\\\\\");
 
     try {
-      //messageCreation(agentactiontype, path, registerData:none)
-      const client = new net.Socket();
-
-      const commandByte = Buffer.from([AgentActionType.DELETE_FILE]);
-      const filePathBuffer = Buffer.from(transformedFilePath, "utf-8");
-      const separator = Buffer.from("$", "utf-8");
-
-      const message = Buffer.concat([commandByte, filePathBuffer, separator]);
-      
-      console.log(
-        "Delete data being sent to agent:",
-        message.toString("utf-8")
+      message = messageCreation(
+        AgentActionType.DELETE_FILE,
+        transformedFilePath
       );
-      //return sendToAgent
-      return new Promise((resolve, reject) => {
-        client.connect(2512, "127.0.0.1", () => {
-          client.write(message);
-        });
-
-        client.on("data", (data) => {
-          client.end();
-          resolve({ status: "success", response: data.toString() });
-        });
-
-        client.on("error", (err) => {
-          console.error("Socket error:", err);
-          client.end();
-          reject({ status: "error", message: err.message });
-
-          client.on("close", () => {
-            console.log("Socket connection closed.");
-          });
-        });
-      });
+      return sendToAgent(message, "delete");
     } catch (err) {
       console.error("Unexpected error during delete:", err);
       return { status: "error", message: "Unexpected delete error" };
