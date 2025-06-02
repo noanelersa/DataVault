@@ -171,6 +171,8 @@ BOOLEAN HandleUIRequest(char* recvbuf, int recvbuflen, const char* username,char
         return HandleUIDeleteFile((recvbuf + 1), (recvbuflen - 1), username);
     case UI_REQUEST_LOGIN:
         return HandleUILogin((recvbuf + 1), (recvbuflen - 1),outStrBuf, outBufSize);
+    case UI_REQUEST_GET_ALERTS:Add commentMore actions
+        return HandleUIDisplayAlerts((recvbuf + 1), (recvbuflen - 1), username);
     default:
         printf("Error: Invalid requrest type received from UI: %d\n", retquestType);
         return FALSE;
@@ -635,4 +637,79 @@ BOOLEAN HandleUILogin(char* recvbuf, int recvbuflen, char* token, int tokenSize)
     InternetCloseHandle(hInternet);
 
     return statusCode == 200;
+}
+  BOOLEAN HandleUIDisplayAlerts(char* recvbuf, int recvbuflen, const char* username) {Add commentMore actions
+
+    HINTERNET hSession = NULL, hConnect = NULL, hRequest = NULL;
+
+    if (!extractedPath || !jsonAcl) {
+        printf("Error: Failed to parse input data.\n");
+        if (extractedPath) free(extractedPath);
+        if (jsonAcl) free(jsonAcl);
+        return FALSE;
+    }
+
+    if (!OpenHttpConnection(&hSession, &hConnect)) {
+        printf("Error: Failed to open HTTP connection.\n");
+        return FALSE;
+    }
+     char endpoint[256];
+        snprintf(endpoint, sizeof(endpoint), "/alerts/username/%s",username);
+        printf("Requesting GET endpoint: %s\n", endpoint);
+
+        hRequest = HttpOpenRequestA(hConnect, "GET", endpoint, NULL, NULL, NULL,
+                                    INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 0);
+        if (!hRequest) {
+            printf("Error: HttpOpenRequestA failed with %d\n", GetLastError());
+            CloseAllHandlers(&hRequest, &hConnect, &hSession);
+            return FALSE;
+        }
+
+        char headers[512];
+        snprintf(headers, sizeof(headers),
+                 "Host: %s:%d\r\nAccept: /\r\n",
+                 DV_SERVER_IP, DV_SERVER_PORT);
+
+        if (!HttpSendRequestA(hRequest, headers, (DWORD)strlen(headers), NULL, 0)) {
+            printf("Error: HttpSendRequestA failed with %d\n", GetLastError());
+            InternetCloseHandle(hRequest);
+            CloseAllHandlers(&hRequest, &hConnect, &hSession);
+            return FALSE;
+        }
+
+        DWORD statusCode = 0;
+        DWORD statusCodeSize = sizeof(statusCode);
+        if (!HttpQueryInfoA(hRequest, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER,
+                            &statusCode, &statusCodeSize, NULL)) {
+            printf("Error: HttpQueryInfoA failed with %d\n", GetLastError());
+            InternetCloseHandle(hRequest);
+            CloseAllHandlers(&hRequest, &hConnect, &hSession);
+            free(extractedPath);
+            return FALSE;
+        }
+
+        printf("Server responded with status code: %lu\n", statusCode);
+
+         if (statusCode == 200) {
+                char buffer[4096];
+                DWORD bytesRead = 0;
+                while (InternetReadFile(hRequest, buffer, sizeof(buffer) - 1, &bytesRead) && bytesRead > 0) {
+                    buffer[bytesRead] = '\0';
+                    printf("%s", buffer);
+
+                    int sendResult = send(clientSocket, buffer, bytesRead, 0);
+                          if (sendResult == SOCKET_ERROR) {
+                                printf("Error: send failed with %d\n", WSAGetLastError());
+                                break;
+                                }
+                }
+                printf("\n");
+            } else {
+                printf("Failed to retrieve alerts. Status code: %lu\n", statusCode);
+            }
+
+        InternetCloseHandle(hRequest);
+        CloseAllHandlers(&hRequest, &hConnect, &hSession);
+
+        return (statusCode == 200);
 }
