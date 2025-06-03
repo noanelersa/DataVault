@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { Button } from "./components/ui/button";
-import { Bell, Upload, Download, FileText, Users, AlertTriangle, MoreVertical, Share2, UserPlus, Clock, Info, ArrowLeft, Settings, Trash2 } from 'lucide-react';
+import { Bell, Upload, Download, FileText, Users, AlertTriangle, MoreVertical, Share2, UserPlus, Clock, Info, ArrowLeft, Settings, Trash2, Ban } from 'lucide-react';
 import axios from 'axios';
 
 // const socket = io("localhost:2512"); // Connect to the server
@@ -17,6 +17,8 @@ const FileManagementSystem = () => {
   const [fileForPermissionEdit, setFileForPermissionEdit] = useState(null); //the file we change the permissions to
   const [editedPermissions, setEditedPermissions] = useState([]); //save the users with updated permissions
 
+  const [alerts, setAlerts] = useState([]);
+
   const existingUsers = [
     { id: 1, name: 'roys' },
     { id: 2, name: 'talc' },
@@ -25,8 +27,6 @@ const FileManagementSystem = () => {
     { id: 5, name: 'taliam' },
     { id: 6, name: 'noan' },
   ];
-
-  let alerts = []
   
   const [files, setFiles] = useState([]);
 
@@ -98,24 +98,6 @@ const FileManagementSystem = () => {
         setFiles((prevFiles) => [...prevFiles, newFile]);
     }
   };
-
-  const getMyAlerts = () => {
-      fetch('http://localhost:2513/alerts/user/7075ed12', {
-        method: 'GET', 
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-        .then((response) => response.json())
-        .then((data) => {
-          alerts = data
-          console.log('Response:', data);
-        })
-        .catch((error) => {
-          console.error('Error:', error);
-          setResponseMessage('Error sending data');
-        });
-    };
 
   const triggerFileInput = () => {
     fileInputRef.current.click();
@@ -473,7 +455,6 @@ const FileManagementSystem = () => {
     }
   };
 
-
   const renderFiles = () => (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -536,22 +517,58 @@ const FileManagementSystem = () => {
     </div>
   );
 
+  const getMyAlerts = () => {
+    fetch(`/api/alerts`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        const userId = localStorage.getItem("userId");
+        const filteredData = data.filter(item => item.file.owner.username === userId);
+        setAlerts(filteredData);
+      })
+      .catch((error) => {
+        setResponseMessage('Error sending data');
+      });
+  };
+
   const renderAlerts = () => (
     <div className="space-y-4">
       <h2 className="text-2xl font-bold">Alerts</h2>
       <div className="space-y-2">
-        {[
-          { id: 1, message: 'User1 accessed report.pdf', time: '2 hours ago' },
-          { id: 2, message: 'User2 downloaded data.xlsx', time: '1 day ago' }
-        ].map(alert => (
-          <div key={alert.id} className="flex items-center p-4 border rounded bg-transparent">
-            <AlertTriangle className="mr-2 text-yellow-500" size={16} />
-            <div>
-              <p className="text-sm font-medium">{alert.message}</p>
-              <p className="text-xs text-gray-500">{alert.time}</p>
+        {alerts.map(alert => {
+          let Icon;
+          let class_name
+          switch (alert.severity) {
+            case 1:
+              Icon = Info;
+              class_name = "mr-2 text-blue-500";
+              break;
+            case 2:
+              Icon = AlertTriangle;
+              class_name = "mr-2 text-yellow-500";
+              break;
+            case 3:
+              Icon = Ban;
+              class_name = "mr-2 text-red-500";
+              break;
+            default:
+              Icon = Info; // fallback
+          }
+
+          return (
+            <div key={alert.alertId} className="flex items-center p-4 border rounded bg-transparent">
+              <Icon className={class_name} size={16} />
+              <div>
+                <p className="text-sm font-medium">{alert.message.replace("user", alert.user.username)}</p>
+                <p className="text-xs text-gray-500">{alert.createdAt.replace('T',' - ').split('.')[0]}</p>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
