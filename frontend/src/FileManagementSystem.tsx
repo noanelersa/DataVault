@@ -18,6 +18,8 @@ const FileManagementSystem = () => {
   const [editedPermissions, setEditedPermissions] = useState([]); //save the users with updated permissions
 
   const [alerts, setAlerts] = useState([]);
+  const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
+
 
   const existingUsers = [
     { id: 1, name: 'roys' },
@@ -534,14 +536,36 @@ const FileManagementSystem = () => {
         setResponseMessage('Error sending data');
       });
   };
+  const renderAlertDetails = () => (
+    <div className="space-y-4">
+      <Button variant="ghost" onClick={() => setSelectedAlert(null)}>
+        <ArrowLeft className="mr-2" size={16} />
+        Back to Alerts
+      </Button>
+
+      <h2 className="text-2xl font-bold">Alert #{selectedAlert.alertId} Details</h2>
+
+      <div className="p-4 border rounded bg-transparent space-y-2">
+        <p><strong>Message:</strong> {selectedAlert.message.replace("user", selectedAlert.user.username)}</p>
+        <p><strong>User:</strong> {selectedAlert.user.username}</p>
+        <p><strong>Action:</strong> {selectedAlert.action}</p>
+        <p><strong>Severity:</strong> {selectedAlert.severity}</p>
+        <p><strong>Created At:</strong> {selectedAlert.createdAt.replace('T',' - ').split('.')[0]}</p>
+        <p><strong>File:</strong> {selectedAlert.file.fileName.split("\\").pop()}</p>
+      </div>
+    </div>
+  );
 
   const renderAlerts = () => (
     <div className="space-y-4">
-      <h2 className="text-2xl font-bold">Alerts</h2>
+      <div>
+        <h2 className="text-2xl font-bold">Alerts</h2>
+        <p className="text-xs text-gray-500">Click on an alert for more info</p>
+      </div>
       <div className="space-y-2">
         {alerts.map(alert => {
           let Icon;
-          let class_name
+          let class_name;
           switch (alert.severity) {
             case 1:
               Icon = Info;
@@ -556,15 +580,19 @@ const FileManagementSystem = () => {
               class_name = "mr-2 text-red-500";
               break;
             default:
-              Icon = Info; // fallback
+              Icon = Info;
           }
 
           return (
-            <div key={alert.alertId} className="flex items-center p-4 border rounded bg-transparent">
+            <div
+              key={alert.alertId}
+              className="flex items-center p-4 border rounded bg-transparent cursor-pointer hover:bg-gray-800/30 transition"
+              onClick={() => setSelectedAlert(alert)}
+            >
               <Icon className={class_name} size={16} />
               <div>
                 <p className="text-sm font-medium">{alert.message.replace("user", alert.user.username)}</p>
-                <p className="text-xs text-gray-500">{alert.createdAt.replace('T',' - ').split('.')[0]}</p>
+                <p className="text-xs text-gray-500">{alert.createdAt.replace('T', ' - ').split('.')[0]}</p>
               </div>
             </div>
           );
@@ -572,6 +600,7 @@ const FileManagementSystem = () => {
       </div>
     </div>
   );
+
 
   const renderUsers = () => (
     <div className="space-y-4">
@@ -626,14 +655,16 @@ const FileManagementSystem = () => {
       <div className="max-w-7xl mx-auto px-4 py-6">
         {selectedFile ? (
           <FileInfoView file={selectedFile} onBack={() => setSelectedFile(null)} />
-        ) : (
-          {
-            files: renderFiles(),
-            alerts: renderAlerts(),
-            users: renderUsers(),
-          }[page]
+          ) : page === 'alerts' ? (
+            selectedAlert ? renderAlertDetails() : renderAlerts()
+          ) : (
+            {
+              files: renderFiles(),
+              users: renderUsers(),
+            }[page]
         )}
       </div>
+
     </div>
   );
 };
