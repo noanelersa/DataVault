@@ -30,15 +30,11 @@ def send_to_agent(data: bytes):
         print(e)
         raise
 
-
-
 def serialize_acl(acl_list):
     return '|'.join(
         f"{user['name']};{'0' if user['access'] == 'read' else '1'}"
         for user in acl_list
     )
-
-
 
 def require_auth(f):
     @wraps(f)
@@ -48,7 +44,6 @@ def require_auth(f):
             return jsonify({"status": "fail", "error": "Missing or invalid auth token"}), 401
         return f(*args, **kwargs)
     return decorated
-
 
 @app.route("/register", methods=["POST"])
 @require_auth
@@ -65,40 +60,7 @@ def register():
         print("Error in registration:")
         print(e)
         return {"status": "fail", "error": "Error during registration process."}, 500
-
-
-@app.route("/update-permissions", methods=["POST"])
-@require_auth
-def update_permissions():
-    file_data = request.json
-
-    try:
-        register_data = serialize_acl(file_data['acl'])  
-        token = request.cookies.get("auth_token")
-
-        register_data = AgentActionType.UPDATE_PERMISSIONS.value.to_bytes(1,byteorder='big') + f"{BASE_PATH}{file_data['name']}$token={token}$".encode() + register_data.encode() + b"$"
-        send_to_agent(register_data)
-        return {"status": "success"}
-    except Exception as e:
-        print("Error updating permissions:")
-        print(e)
-        return {"status": "fail", "error": "Error during permission update process."}, 500
-
-
-@app.route("/delete/<file_name>" , methods=["DELETE"])
-@require_auth
-def delete_file(file_name):
-    try:
-        token = request.cookies.get("auth_token")
-        delete_data = AgentActionType.DELETE_FILE.value.to_bytes(1,byteorder='big') + f"{BASE_PATH}{file_name}$token={token}$".encode()
-        send_to_agent(delete_data)
-        return {"status":"success"}
-    except Exception as e:
-        print("Error deleting file:")
-        print(e)
-        return {"status": "fail", "error": "Error during file deleting."}, 500
     
-
 @app.route("/login", methods=["POST"])
 def login():
     try:
@@ -115,8 +77,6 @@ def login():
         if not response:
             return {"status": "fail", "error": "No response from agent"}, 500
         
-
-
         if response[0] == 1:
             token = response[1:].decode(errors="ignore")  
             print("Login successful. Message from agent:", token)
@@ -135,7 +95,5 @@ def login():
         print("Error in login:")
         print(e)
         return {"status": "fail", "error": "Error during login process."}, 500
-
-        
 
 app.run(host="0.0.0.0", port="2513", debug=True)
