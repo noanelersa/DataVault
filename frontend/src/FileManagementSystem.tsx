@@ -629,6 +629,41 @@ const FileManagementSystem = () => {
     </div>
   );
 
+  const useAlertNotifications = () => {
+    const previousAlertCountRef = useRef(0);
+
+    useEffect(() => {
+      if (Notification.permission !== "granted") {
+        Notification.requestPermission();
+      }
+
+      const fetchAlerts = () => getMyAlerts(setAlerts);
+
+      // First fetch immediately
+      fetchAlerts();
+
+      // Fetch every minute
+      const interval = setInterval(fetchAlerts, 60000);
+
+      return () => clearInterval(interval);
+    }, []);
+
+    useEffect(() => {
+      if (alerts.length > previousAlertCountRef.current) {
+        if (Notification.permission === "granted") {
+          new Notification("New Alert!", {
+            body: "A new alert has been received.",
+            icon: "/icon.png", // optional
+          });
+        }
+      }
+
+      // Update stored count every time alerts change
+      previousAlertCountRef.current = alerts.length;
+    }, [alerts]);
+  };
+  useAlertNotifications();
+
   return (
     <div
       className="min-h-screen bg-gradient-to-br from-[#0a1128] via-[#1b2a49] to-[#0a1128] text-white font-sans"
@@ -664,7 +699,6 @@ const FileManagementSystem = () => {
             }[page]
         )}
       </div>
-
     </div>
   );
 };
