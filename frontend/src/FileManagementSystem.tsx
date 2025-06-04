@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { Button } from "./components/ui/button";
-import { Bell, Upload, Download, FileText, Users, AlertTriangle, MoreVertical, Share2, UserPlus, Clock, Info, ArrowLeft, Settings, Trash2 } from 'lucide-react';
+import { Bell, Upload, Download, FileText, Users, AlertTriangle, MoreVertical, Share2, UserPlus, Clock, Info, ArrowLeft, Settings, Trash2, Ban } from 'lucide-react';
 import axios from 'axios';
 
 // const socket = io("localhost:2512"); // Connect to the server
@@ -17,6 +17,10 @@ const FileManagementSystem = () => {
   const [fileForPermissionEdit, setFileForPermissionEdit] = useState(null); //the file we change the permissions to
   const [editedPermissions, setEditedPermissions] = useState([]); //save the users with updated permissions
 
+  const [alerts, setAlerts] = useState([]);
+  const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
+
+
   const existingUsers = [
     { id: 1, name: 'roys' },
     { id: 2, name: 'talc' },
@@ -25,8 +29,6 @@ const FileManagementSystem = () => {
     { id: 5, name: 'taliam' },
     { id: 6, name: 'noan' },
   ];
-
-  let alerts = []
   
   const [files, setFiles] = useState([]);
 
@@ -98,24 +100,6 @@ const FileManagementSystem = () => {
         setFiles((prevFiles) => [...prevFiles, newFile]);
     }
   };
-
-  const getMyAlerts = () => {
-      fetch('http://localhost:2513/alerts/user/7075ed12', {
-        method: 'GET', 
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-        .then((response) => response.json())
-        .then((data) => {
-          alerts = data
-          console.log('Response:', data);
-        })
-        .catch((error) => {
-          console.error('Error:', error);
-          setResponseMessage('Error sending data');
-        });
-    };
 
   const triggerFileInput = () => {
     fileInputRef.current.click();
@@ -473,7 +457,6 @@ const FileManagementSystem = () => {
     }
   };
 
-
   const renderFiles = () => (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -536,25 +519,88 @@ const FileManagementSystem = () => {
     </div>
   );
 
-  const renderAlerts = () => (
+  const getMyAlerts = () => {
+    fetch(`/api/alerts`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        const userId = localStorage.getItem("userId");
+        const filteredData = data.filter(item => item.file.owner.username === userId);
+        setAlerts(filteredData);
+      })
+      .catch((error) => {
+        setResponseMessage('Error sending data');
+      });
+  };
+  const renderAlertDetails = () => (
     <div className="space-y-4">
-      <h2 className="text-2xl font-bold">Alerts</h2>
-      <div className="space-y-2">
-        {[
-          { id: 1, message: 'User1 accessed report.pdf', time: '2 hours ago' },
-          { id: 2, message: 'User2 downloaded data.xlsx', time: '1 day ago' }
-        ].map(alert => (
-          <div key={alert.id} className="flex items-center p-4 border rounded bg-transparent">
-            <AlertTriangle className="mr-2 text-yellow-500" size={16} />
-            <div>
-              <p className="text-sm font-medium">{alert.message}</p>
-              <p className="text-xs text-gray-500">{alert.time}</p>
-            </div>
-          </div>
-        ))}
+      <Button variant="ghost" onClick={() => setSelectedAlert(null)}>
+        <ArrowLeft className="mr-2" size={16} />
+        Back to Alerts
+      </Button>
+
+      <h2 className="text-2xl font-bold">Alert #{selectedAlert.alertId} Details</h2>
+
+      <div className="p-4 border rounded bg-transparent space-y-2">
+        <p><strong>Message:</strong> {selectedAlert.message.replace("user", selectedAlert.user.username)}</p>
+        <p><strong>User:</strong> {selectedAlert.user.username}</p>
+        <p><strong>Action:</strong> {selectedAlert.action}</p>
+        <p><strong>Severity:</strong> {selectedAlert.severity}</p>
+        <p><strong>Created At:</strong> {selectedAlert.createdAt.replace('T',' - ').split('.')[0]}</p>
+        <p><strong>File:</strong> {selectedAlert.file.fileName.split("\\").pop()}</p>
       </div>
     </div>
   );
+
+  const renderAlerts = () => (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-2xl font-bold">Alerts</h2>
+        <p className="text-xs text-gray-500">Click on an alert for more info</p>
+      </div>
+      <div className="space-y-2">
+        {alerts.map(alert => {
+          let Icon;
+          let class_name;
+          switch (alert.severity) {
+            case 1:
+              Icon = Info;
+              class_name = "mr-2 text-blue-500";
+              break;
+            case 2:
+              Icon = AlertTriangle;
+              class_name = "mr-2 text-yellow-500";
+              break;
+            case 3:
+              Icon = Ban;
+              class_name = "mr-2 text-red-500";
+              break;
+            default:
+              Icon = Info;
+          }
+
+          return (
+            <div
+              key={alert.alertId}
+              className="flex items-center p-4 border rounded bg-transparent cursor-pointer hover:bg-gray-800/30 transition"
+              onClick={() => setSelectedAlert(alert)}
+            >
+              <Icon className={class_name} size={16} />
+              <div>
+                <p className="text-sm font-medium">{alert.message.replace("user", alert.user.username)}</p>
+                <p className="text-xs text-gray-500">{alert.createdAt.replace('T', ' - ').split('.')[0]}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
 
   const renderUsers = () => (
     <div className="space-y-4">
@@ -609,14 +655,16 @@ const FileManagementSystem = () => {
       <div className="max-w-7xl mx-auto px-4 py-6">
         {selectedFile ? (
           <FileInfoView file={selectedFile} onBack={() => setSelectedFile(null)} />
-        ) : (
-          {
-            files: renderFiles(),
-            alerts: renderAlerts(),
-            users: renderUsers(),
-          }[page]
+          ) : page === 'alerts' ? (
+            selectedAlert ? renderAlertDetails() : renderAlerts()
+          ) : (
+            {
+              files: renderFiles(),
+              users: renderUsers(),
+            }[page]
         )}
       </div>
+
     </div>
   );
 };
