@@ -403,16 +403,16 @@ const FileManagementSystem = () => {
                 <dd className="text-sm text-white-900">{file.originalFileName.split('\\').pop().split('.').pop()}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-sm font-medium text-white-500">Size</dt>
-                <dd className="text-sm text-white-900">{file.size}</dd>
-              </div>
-              <div className="flex justify-between">
                 <dt className="text-sm font-medium text-white-500">Uploaded by</dt>
                 <dd className="text-sm text-white-900">{file.owner}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-sm font-medium text-white-500">Upload date</dt>
                 <dd className="text-sm text-white-900">{file.uploadTime.split(' ')[0]}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-sm font-medium text-white-500">Hash</dt>
+                <dd className="text-sm text-white-900">{file.originalFileHash}</dd>
               </div>
             </dl>
           </CardContent>
@@ -618,34 +618,6 @@ const FileManagementSystem = () => {
     </div>
   );
 
-
-  const renderUsers = () => (
-    <div className="space-y-4">
-      <h2 className="text-2xl font-bold">Users</h2>
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-transparent">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Username</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Last Active</th>
-            </tr>
-          </thead>
-          <tbody className="bg-transparent divide-y divide-white">
-            {[
-              { id: 1, name: 'user1', lastActive: '2024-12-26' },
-              { id: 2, name: 'user2', lastActive: '2024-12-24' }
-            ].map(user => (
-              <tr key={user.id} className="hover:bg-gray-800/30">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{user.name}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{user.lastActive}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-
   const useAlertNotifications = () => {
     const previousAlertCountRef = useRef(0);
 
@@ -697,9 +669,6 @@ const FileManagementSystem = () => {
                 setPage('alerts')}}>
                 <Bell className="mr-2" size={16} /> Alerts
               </Button>
-              <Button variant={page === 'users' ? 'default' : 'ghost'} onClick={() => setPage('users')}>
-                <Users className="mr-2" size={16} /> Users
-              </Button>
             </div>
           </div>
         </div>
@@ -712,7 +681,6 @@ const FileManagementSystem = () => {
           ) : (
             {
               files: renderFiles(),
-              users: renderUsers(),
             }[page]
         )}
       </div>
