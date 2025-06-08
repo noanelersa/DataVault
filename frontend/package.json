@@ -3,7 +3,11 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+<<<<<<< HEAD
   "main": "electron/main.cjs",
+=======
+  "main": "main.cjs",
+>>>>>>> 00c908d (Convert ui_backend.py to Electron)
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -20,7 +24,10 @@
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "express": "^5.1.0",
+<<<<<<< HEAD
     "extract-zip": "^2.0.1",
+=======
+>>>>>>> 00c908d (Convert ui_backend.py to Electron)
     "lucide-react": "^0.486.0",
     "mime-types": "^3.0.1",
     "net": "^1.0.2",
@@ -38,7 +45,11 @@
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.21",
+<<<<<<< HEAD
     "electron": "^36.3.2",
+=======
+    "electron": "^36.4.0",
+>>>>>>> 00c908d (Convert ui_backend.py to Electron)
     "eslint": "^9.21.0",
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.19",
