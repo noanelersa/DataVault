@@ -1,65 +1,31 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const net = require("net");
-const { dialog } = require("electron");
 const fs = require("fs").promises;
 const mime = require("mime-types");
-const Config = require('./config.cjs');
-const commandWhitelist = require('./commands_whitelist.cjs');
+const express = require("express");
+const cookieParser = require("cookie-parser");
+const cors = require("cors");
+const Config = require("./config.cjs");
 
+const expressApp = express();
+const PORT = 4000;
 
-function createWindow() {
-  const win = new BrowserWindow({
-    width: 800,
-    height: 600,
-    webPreferences: {
-      preload: path.join(__dirname, "preload.cjs"),
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
-  });
-
-  win.loadURL("http://localhost:80");
-}
-
-app.whenReady().then(createWindow);
-
-const AgentActionType = {
-  UPLOAD_FILE: 0x01,
-  UPDATE_PERMISSIONS: 0x02,
-  DELETE_FILE: 0x03,
+const corsOptions = {
+    origin: 'http://localhost', 
+    methods: "GET,HEAD,PUT,PATCH,POST,DELETE", 
+    allowedHeaders: "Content-Type,Authorization", 
+    credentials: true
 };
 
-async function chooseFile() {
-  const { canceled, filePaths } = await dialog.showOpenDialog({
-    title: "Choose a file to upload",
-    properties: ["openFile"],
-  });
+expressApp.use(cors(corsOptions)); 
 
-  if (canceled || filePaths.length === 0) {
-    return null;
-  }
-  const filePath = filePaths[0];
+expressApp.use(express.json());
+expressApp.use(cookieParser());
 
-  try {
-    const stats = await fs.stat(filePath);
-    const fileSize = (stats.size / (1024 * 1024)).toFixed(1);
-
-    const fileType = mime.lookup(filePath) || "application/octet-stream";
-
-    return {
-      path: filePath,
-      size: fileSize,
-      type: fileType,
-    };
-  } catch (err) {
-    console.error("Error getting file stats or MIME type:", err);
-    return null;
-  }
-}
+const AgentActionType = { UPLOAD_FILE: 0x01 };
 
 function serializeACL(aclList) {
-  console.log(aclList);
   return aclList
     .map((user) => `${user.name};${user.access === "read" ? "\x00" : "\x01"}`)
     .join("|");
@@ -98,9 +64,9 @@ function sendToAgent(message, commandName = "unknown_command") {
 
           const responseByte = receivedDataBuffer.readUInt8(0);
 
-          if (responseByte === 0x00) {
+          if (responseByte === 0x01) {
             console.log(
-              `Agent responded with success (0x00) for '${commandName}'.`
+              `Agent responded with success (0x01) for '${commandName}'.`
             );
             client.end();
             resolve({ status: "success", message: "OK" });
@@ -152,29 +118,147 @@ function sendToAgent(message, commandName = "unknown_command") {
   });
 }
 
-
-function messageCreation(agentActionType, path, registerData = null) {
+function messageCreation(
+  agentActionType,
+  path,
+  registerData = null,
+  authToken
+) {
   const commandByte = Buffer.from([agentActionType]);
   const filePathBuffer = Buffer.from(path, "utf-8");
   const separator = Buffer.from("$", "utf-8");
+  const token = authToken
+    ? Buffer.from(`token=${authToken}`, "utf-8")
+    : null;
   let message;
 
   if (registerData === null) {
-    message = Buffer.concat([commandByte, filePathBuffer, separator]);
+    if (token) {
+      message = Buffer.concat([commandByte, filePathBuffer, separator, token]);
+    } else {
+      message = Buffer.concat([commandByte, filePathBuffer, separator]);
+    }
   } else {
     const acl = Buffer.from(registerData, "utf-8");
-    message = Buffer.concat([
-      commandByte,
-      filePathBuffer,
-      separator,
-      acl,
-      separator,
-    ]);
+    if (token) {
+      message = Buffer.concat([
+        commandByte,
+        filePathBuffer,
+        separator,
+        token,
+        acl,
+        separator,
+      ]);
+    } else {
+      message = Buffer.concat([
+        commandByte,
+        filePathBuffer,
+        separator,
+        acl,
+        separator,
+      ]);
+    }
   }
   console.log("data being sent to agent:", message.toString("utf-8"));
   return message;
 }
 
+expressApp.post("/upload", async (req, res) => {
+  console.log(`Received command on /upload`);
+
+  try {
+    const { path: filePath, sharedWith } = req.body;
+    console.log(filePath);
+    console.log(sharedWith);
+
+    const authHeader = req.headers["authorization"];
+    const authToken = authHeader && authHeader.split(" ")[1];
+
+    console.log(authToken);
+
+    if (!authToken) {
+      console.error(`Authentication token missing for /upload`);
+      return res
+        .status(401)
+        .json({
+          status: "error",
+          message: "Authentication required. Token missing.",
+        });
+    }
+
+    const transformedFilePath = filePath.replaceAll("\\", "\\\\");
+    let registerData = serializeACL(sharedWith);
+    if (registerData.endsWith("|")) {
+      registerData = registerData.slice(0, -1);
+    }
+
+    const message = messageCreation(
+      AgentActionType.UPLOAD_FILE,
+      transformedFilePath,
+      registerData,
+      authToken
+    );
+
+    const agentResponse = await sendToAgent(message, "upload");
+
+    if (agentResponse.status === "success") {
+      res.json({ status: "success", message: "File registered successfully." });
+    } else {
+      res
+        .status(500)
+        .json({
+          status: "error",
+          message: agentResponse.message || "Agent reported an error.",
+        });
+    }
+  } catch (err) {
+    console.error("Unexpected error in /upload route:", err);
+    res
+      .status(500)
+      .json({
+        status: "error",
+        message: "An unexpected server error occurred.",
+      });
+  }
+});
+
+expressApp.listen(PORT, "127.0.0.1", () => {
+  console.log(
+    `Express server listening for uploads on http://127.0.0.1:${PORT}`
+  );
+});
+
+async function chooseFile() {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    title: "Choose a file to upload",
+    properties: ["openFile"],
+  });
+
+  if (canceled || filePaths.length === 0) {
+    return null;
+  }
+  const filePath = filePaths[0];
+
+  try {
+    const stats = await fs.stat(filePath);
+    if (stats.size < 1024 * 1024) {
+        fileSize = `${(stats.size / 1024).toFixed(1)} KB`;
+    } else {
+        fileSize = `${(stats.size / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    const fileType = mime.lookup(filePath) || "application/octet-stream";
+
+    return {
+      path: filePath,
+      size: fileSize,
+      type: fileType,
+    };
+  } catch (err) {
+    console.error("Error getting file stats or MIME type:", err);
+    return null;
+  }
+}
 
 ipcMain.handle("choose-file", async () => {
   const fileInfo = await chooseFile();
@@ -182,86 +266,18 @@ ipcMain.handle("choose-file", async () => {
   return fileInfo;
 });
 
+function createWindow() {
+  const win = new BrowserWindow({
+    width: 800,
+    height: 600,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
 
-ipcMain.handle("agent-command", async (event, command, args) => {
-  if (!args) {
-    console.error("Invalid arguments for agent-command:", args);
-    return { status: "error", message: "Invalid arguments provided." };
-  }
-    if (!commandWhitelist.includes(command)) {
-    console.error(`SECURITY VIOLATION: Unauthorized command received: '${command}'.`);
-    return { status: "error", message: `Unauthorized command: '${command}'.` };
-  }
-  console.log(`Received command from frontend: ${command}`);
+  win.loadURL("http://localhost:80");
+}
 
-  if (command === "upload" && args) {
-    const { path, sharedWith } = args;
-    console.log(path);
-    const transformedFilePath = path.replaceAll("\\", "\\\\\\\\");
-    console.log(transformedFilePath);
-    console.log("Received args:", args);
-
-    try {
-      let registerData = "";
-      registerData = serializeACL(sharedWith);
-
-      if (registerData.endsWith("|")) {
-        registerData = registerData.slice(0, -1);
-      }
-      message = messageCreation(
-        AgentActionType.UPLOAD_FILE,
-        transformedFilePath,
-        registerData
-      );
-      // return {status: "success"};
-      return sendToAgent(message, "upload");
-    } catch (err) {
-      console.error("Unexpected error:", err);
-      return { status: "error", message: "Unexpected error" };
-    }
-  } else if (command === "update-permissions" && args) {
-    const { path, sharedWith } = args;
-    console.log(path);
-    const transformedFilePath = path.replaceAll("\\", "\\\\\\\\");
-    console.log(transformedFilePath);
-    console.log("Received args:", args);
-
-    try {
-      let registerData = "";
-      registerData = serializeACL(sharedWith);
-
-      if (registerData.endsWith("|")) {
-        registerData = registerData.slice(0, -1);
-      }
-
-      message = messageCreation(
-        AgentActionType.UPDATE_PERMISSIONS,
-        transformedFilePath,
-        registerData
-      );
-      // return {status: "success"};
-      return sendToAgent(message, "update-permissions");
-    } catch (err) {
-      console.error("Unexpected error:", err);
-      return { status: "error", message: "Unexpected error" };
-    }
-  } else if (command === "delete" && args) {
-    const { path } = args;
-    console.log("Received Delete Args:", args);
-    const transformedFilePath = path.replaceAll("\\", "\\\\\\\\");
-
-    try {
-      message = messageCreation(
-        AgentActionType.DELETE_FILE,
-        transformedFilePath
-      );
-      return sendToAgent(message, "delete");
-    } catch (err) {
-      console.error("Unexpected error during delete:", err);
-      return { status: "error", message: "Unexpected delete error" };
-    }
-  } else {
-    console.error(`Unknown or incomplete command received: ${command}`, args);
-    return { status: "error", message: "Unknown or incomplete command." };
-  }
-});
+app.whenReady().then(createWindow);

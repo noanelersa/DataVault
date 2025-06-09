@@ -1,8 +1,13 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("agentAPI", {
-  sendCommand: (command, args) =>
-    ipcRenderer.invoke("agent-command", command, args),
-  invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),
-
+  invoke: (channel, ...args) => {
+    const allowedChannels = ["choose-file"];
+    if (allowedChannels.includes(channel)) {
+      return ipcRenderer.invoke(channel, ...args);
+    }
+    console.error(
+      `SECURITY WARNING: Blocked an attempt to invoke a non-whitelisted channel: '${channel}'`
+    );
+  },
 });
