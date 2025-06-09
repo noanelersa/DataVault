@@ -1,46 +1,59 @@
-import React, { useState } from 'react';
-import { useTypingEffect } from './components/ui/useTypingEffect';
-import Navbar from './components/navbar'; 
+import React, { useState } from "react";
+import { useTypingEffect } from "./components/ui/useTypingEffect";
+import Navbar from "./components/navbar";
 
 interface LoginPageProps {
   onLogin: (username: string) => void;
 }
 
 const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
-  const subtitle = useTypingEffect('Secure and track your sensitive files.', 25);
+  const subtitle = useTypingEffect(
+    "Secure and track your sensitive files.",
+    25
+  );
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
 
     try {
-      const response = await fetch('http://localhost:2513/login', {
-        method: 'POST',
+      const response = await fetch("/api/user/login", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        credentials: 'include',
         body: JSON.stringify({ username, password }),
       });
 
-      const result = await response.json();
+      if (response.ok) {
+        const authToken = await response.text();
 
-      if (response.ok && result.status === 'success') {
-        localStorage.setItem('userId', username);
+        if (!authToken) {
+          setError("Login successful, but no auth token was received.");
+          return;
+        }
+
         onLogin(username);
+        console.log("Login successful, received token:", authToken);
+
+        localStorage.setItem("authToken", authToken);
+        localStorage.setItem("userId", username);
       } else {
-        setError('Invalid username or password');
+        const errorResult = await response
+          .json()
+          .catch(() => ({ message: "Invalid username or password" }));
+        setError(errorResult.message || "Invalid username or password");
       }
     } catch (err) {
-      console.error('Login failed:', err);
-      setError('Server error. Please try again later.');
+      console.error("Login failed:", err);
+      setError("Server error. Please try again later.");
     }
   };
-  
+
   return (
     <div className="min-h-screen flex bg-gradient-to-br from-[#0a1128] via-[#1b2a49] to-[#0a1128] text-white font-sans">
       <Navbar />
@@ -48,9 +61,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       <div className="w-1/2 flex flex-col justify-center items-start px-20">
         <div className="mb-6">
           <div className="text-5xl font-bold mb-4">DataVault</div>
-          <p className="text-lg text-gray-300 max-w-md mb-6">
-          {subtitle}
-          </p>
+          <p className="text-lg text-gray-300 max-w-md mb-6">{subtitle}</p>
           <button className="bg-gradient-to-r from-blue-500 to-cyan-400 text-white px-5 py-2 rounded-lg font-semibold hover:opacity-90 transition">
             Learn More
           </button>
@@ -59,16 +70,22 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
       {/* Right Panel - Login Form */}
       <div className="w-1/2 flex items-center justify-center">
-      
         <form
           onSubmit={handleLogin}
-          className="bg-white/10 backdrop-blur-md p-10 rounded-xl w-full max-w-md shadow-lg">
-          <h2 className="text-3xl font-semibold text-center mb-6 text-white">Sign In</h2>
+          className="bg-white/10 backdrop-blur-md p-10 rounded-xl w-full max-w-md shadow-lg"
+        >
+          <h2 className="text-3xl font-semibold text-center mb-6 text-white">
+            Sign In
+          </h2>
 
-          {error && <p className="text-red-400 text-sm mb-4 text-center">{error}</p>}
+          {error && (
+            <p className="text-red-400 text-sm mb-4 text-center">{error}</p>
+          )}
 
           <div className="mb-4">
-            <label className="text-sm font-medium text-gray-300 mb-1 block">User Name</label>
+            <label className="text-sm font-medium text-gray-300 mb-1 block">
+              User Name
+            </label>
             <input
               type="text"
               value={username}
@@ -80,7 +97,9 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           </div>
 
           <div className="mb-6">
-            <label className="text-sm font-medium text-gray-300 mb-1 block">Password</label>
+            <label className="text-sm font-medium text-gray-300 mb-1 block">
+              Password
+            </label>
             <input
               type="password"
               value={password}
@@ -101,7 +120,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       </div>
     </div>
   );
-
 };
 
 export default LoginPage;
