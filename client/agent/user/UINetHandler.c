@@ -154,7 +154,6 @@ BOOLEAN HandleUIRequest(char* recvbuf, int recvbuflen, const char* username,char
     }
 
 	const unsigned int retquestType = recvbuf[0];
-    printf("retquestType: %d\n", retquestType);
     switch (retquestType)
     {
     case UI_REQUEST_FILE_REGISTER:
@@ -173,28 +172,6 @@ BOOLEAN HandleUIRequest(char* recvbuf, int recvbuflen, const char* username,char
 
 BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username)
 {
-    printf("=== %s ===\n", username);
-    printf("Length: %d bytes\n", recvbuflen);
-
-    // Hex dump
-    printf("Hex: ");
-    for (int i = 0; i < recvbuflen; ++i) {
-        printf("%02X ", (unsigned char)recvbuf[i]);
-        if ((i + 1) % 16 == 0) printf("\n");
-    }
-    printf("\n");
-
-    // ASCII view
-    printf("Printable: ");
-    for (int i = 0; i < recvbuflen; ++i) {
-        char c = recvbuf[i];
-        if (isprint((unsigned char)c))
-            putchar(c);
-        else
-            putchar('.');
-    }
-    printf("\n==========================\n");
-
     HINTERNET hSession = NULL, hConnect = NULL, hRequest = NULL;
 
     // JSON request body.
