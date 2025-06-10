@@ -168,8 +168,6 @@ expressApp.post("/upload", async (req, res) => {
 
   try {
     const { path: filePath, sharedWith } = req.body;
-    console.log(filePath);
-    console.log(sharedWith);
 
     const authHeader = req.headers["authorization"];
     const authToken = authHeader && authHeader.split(" ")[1];
