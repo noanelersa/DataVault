@@ -101,14 +101,8 @@ DWORD WINAPI ServerWorker(LPVOID lpParam)
 
                 memset(outBuf, 0, sizeof(outBuf));
 
-                BOOLEAN success = HandleUIRequest(recvbuf,iResult,username,outBuf,sizeof(outBuf));
-
-                char sendBuf[1050] = { 0 };
-                sendBuf[0] = (char)success; 
-                strncpy(sendBuf + 1, outBuf, sizeof(sendBuf) - 1);
-
-                int totalSize = 1 + (int)strlen(sendBuf + 1); 
-                iSendResult = send(clientSocket, sendBuf, totalSize, 0);
+				// Send the response to the UI.
+                iSendResult = send(clientSocket, (const char*)&ret, sizeof(BOOLEAN), 0);
 
                 if (iSendResult == SOCKET_ERROR)
                 {
@@ -160,7 +154,6 @@ BOOLEAN HandleUIRequest(char* recvbuf, int recvbuflen, const char* username,char
     }
 
 	const unsigned int retquestType = recvbuf[0];
-
     switch (retquestType)
     {
     case UI_REQUEST_FILE_REGISTER:
@@ -254,7 +247,7 @@ BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username
 
     free(token);
 
-    // Send HTTP request with JSON data
+    // Send HTTP request with JSON data.
     if (!HttpSendRequestA(hRequest, headers, headersLen, jsonData, jsonLen))
     {
         printf("Error: HttpSendRequestA failed with %drr\n", GetLastError());

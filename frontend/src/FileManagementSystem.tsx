@@ -57,48 +57,65 @@ const FileManagementSystem = () => {
   }, []);
   
 
-  const handleFileUpload = (e) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      const file = files[0];
-      console.info(`File uploaded: ${file.name}`);
+  const handleFileUpload = async () => {
+    const username = localStorage.getItem('userId');
+    const token = localStorage.getItem('authToken');
 
-      const newFile = {
-        id: files.length + 1,
-        name: file.name,
-        uploadedBy: '7075ed12', // assuming current user is admin
-        uploadDate: new Date().toISOString().slice(0, 16).replace('T', ' '),
-        lastAccessed: new Date().toISOString().slice(0, 10),
-        accessCount: 0,
-        size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-        type: file.type || 'Unknown',
-        acl: [{ id: 1, name: 'user1', access: 'READ' },{ id: 2, name: 'user2', access: 'READ' }],
-        accessHistory: [
-          { user: '7075ed12', action: 'uploaded', date: new Date().toISOString().slice(0, 16).replace('T', ' ') }
-        ]
-      };
-
-      fetch('http://localhost:2513/register', {
-        method: 'POST', // Specify the HTTP method (POST in this case)
-        headers: {
-          'Content-Type': 'application/json', // Set content type to JSON
-        },
-        credentials: 'include',
-        body: JSON.stringify(newFile), // Convert the data to JSON string
-      })
-        .then((response) => response.json()) // Parse the JSON response
-        .then((data) => {
-          setResponseMessage('Data sent successfully!');
-          console.log('Response:', data); // Log the response data from the server
-        })
-        .catch((error) => {
-          console.error('Error:', error);
-          setResponseMessage('Error sending data');
-        });
-
-        setFiles((prevFiles) => [...prevFiles, newFile]);
+    if (!token || !username) {
+    setResponseMessage("You must be logged in to upload a file.");
+    return; 
     }
-  };
+
+    const fileInfo = await window.agentAPI.invoke("choose-file");
+    if (fileInfo === null) {
+    setResponseMessage("No file selected or error reading file info.");
+    return;
+    }
+
+    const filePath = fileInfo.path;
+    const fileName = filePath.split("\\").pop();
+
+    const date = new Date().toISOString().slice(0, 16).replace("T", " ");
+    const newFile = {
+        id: files.length + 1,
+        name: fileName,
+        uploadedBy: username,
+        uploadDate: date,
+        lastAccessed: new Date().toISOString().slice(0, 10),
+        size: fileInfo.size,
+        type: fileInfo.type || 'Unknown',
+        sharedWith: [],
+        accessHistory: [
+        {
+            user: username,
+            action: "uploaded",
+            date: date,
+        },
+        ],
+        path: filePath,
+    };
+
+    fetch('http://localhost:4000/upload', {
+    method: 'POST',
+    headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}` 
+        },
+
+    body: JSON.stringify(newFile), 
+    })
+    .then((response) => response.json()) 
+    .then((data) => {
+        setResponseMessage('Data sent successfully!');
+        console.log('Response:', data);
+    })
+    .catch((error) => {
+        console.error('Error:', error);
+        setResponseMessage('Error sending data');
+    });
+
+    setFiles((prevFiles) => [...prevFiles, newFile]);
+    };
 
   const triggerFileInput = () => {
     fileInputRef.current.click();
@@ -457,18 +474,13 @@ const FileManagementSystem = () => {
     }
   };
 
+
   const renderFiles = () => (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Files</h2>
         <div>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileUpload}
-            className="hidden"
-          />
-          <Button onClick={triggerFileInput}>
+          <Button onClick={handleFileUpload}>
             <Upload className="mr-2" size={16} /> Upload New File
           </Button>
         </div>
@@ -487,7 +499,12 @@ const FileManagementSystem = () => {
           <tbody className="bg-transparent divide-y divide-gray-600">
             {files.map(file => (
               <tr key={file.fileId} className="hover:bg-gray-800/30">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{file.originalFileName.split('\\').pop()}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
+                {(file.originalFileName && typeof file.originalFileName === 'string') 
+                ? file.originalFileName.split('\\').pop() 
+                : 'Invalid Filename'
+                }
+            </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.owner}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.uploadTime.split(' ')[0]}</td>
                 <td

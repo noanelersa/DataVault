@@ -3,27 +3,34 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron": "electron ."
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.1.2",
     "@shadcn/ui": "^0.0.4",
-    "@tailwindcss/vite": "^4.1.3",
-    "axios": "^1.9.0",
+    "@tailwindcss/vite": "^4.1.7",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "extract-zip": "^2.0.1",
     "lucide-react": "^0.486.0",
+    "mime-types": "^3.0.1",
     "net": "^1.0.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.6.1",
     "socket.io-client": "^4.8.1",
     "tailwind-merge": "^3.0.2",
-    "tw-animate-css": "^1.2.5"
+    "tw-animate-css": "^1.2.5",
+    "yauzl": "^3.2.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",
@@ -31,6 +38,7 @@
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.21",
+    "electron": "^36.3.2",
     "eslint": "^9.21.0",
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.19",
