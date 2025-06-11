@@ -3,9 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { Button } from "./components/ui/button";
 import UploadFileButton from './UploadFileButton';
 import { Bell, Upload, Download, FileText, Users, AlertTriangle, MoreVertical, Share2, UserPlus, Clock, Info, ArrowLeft, Settings, Trash2, Ban } from 'lucide-react';
-import axios from 'axios';
-
-// const socket = io("localhost:2512"); // Connect to the server
 
 const FileManagementSystem = () => {
   const [page, setPage] = useState('files');
@@ -32,31 +29,29 @@ const FileManagementSystem = () => {
   
   const [files, setFiles] = useState([]);
 
-  useEffect(() => {
-    const fetchFiles = async () => {
-      try {
-        const response = await fetch(`/api/file/shared/${localStorage.getItem("userId")}`, {
-          method: 'GET', // or 'POST', 'PUT', etc.
-          headers: {
-            'Content-Type': 'application/json',
-            // Add any other headers if needed
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
+  const fetchFiles = async () => {
+    try {
+      const response = await fetch(`/api/file/shared/${localStorage.getItem("userId")}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
         }
+      });
 
-        const json = await response.json();
-        setFiles(json);
-      } catch (err: any) {
-        throw new Error(`HTTP error! Status: ${err}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
       }
-    };
-  
+
+      const json = await response.json();
+      setFiles(json);
+    } catch (err) {
+      console.error(`Error fetching files:`, err);
+    }
+  };
+
+  useEffect(() => {
     fetchFiles();
   }, []);
-  
 
   const handleFileUpload = async () => {
     const username = localStorage.getItem('userId');
@@ -467,6 +462,7 @@ const FileManagementSystem = () => {
       if (response.ok) {
         console.log("File deleted successfully");
         setFiles(prev => prev.filter(file => file.name !== fileId));
+        await fetchFiles();
       } else {
         console.error("Failed to delete file");
       }
