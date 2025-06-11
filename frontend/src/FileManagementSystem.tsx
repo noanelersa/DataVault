@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { Button } from "./components/ui/button";
+import UploadFileButton from './UploadFileButton';
 import { Bell, Upload, Download, FileText, Users, AlertTriangle, MoreVertical, Share2, UserPlus, Clock, Info, ArrowLeft, Settings, Trash2, Ban } from 'lucide-react';
 import axios from 'axios';
 
@@ -480,9 +481,7 @@ const FileManagementSystem = () => {
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Files</h2>
         <div>
-          <Button onClick={handleFileUpload}>
-            <Upload className="mr-2" size={16} /> Upload New File
-          </Button>
+          <UploadFileButton onFileUpload={handleFileUpload} />
         </div>
       </div>
       <div className="overflow-x-auto">

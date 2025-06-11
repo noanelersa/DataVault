@@ -1,4 +1,6 @@
 const { app, BrowserWindow } = require('electron');
+const { ipcMain, dialog } = require('electron');
+const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -15,6 +17,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
     },
   });
 
@@ -27,7 +30,6 @@ function createWindow() {
 
 // === Backend Setup ===
 const server = express();
-const BASE_PATH = "C:\\Users\\alice\\Documents\\DT\\";
 const AGENT_HOST = 'localhost';
 const AGENT_PORT = 2512;
 const HTTP_PORT = 2513;
@@ -83,7 +85,7 @@ server.post('/register', requireAuth, async (req, res) => {
   const aclData = serializeACL(newFile.acl);
   const buffer = Buffer.concat([
     Buffer.from([AgentActionType.REGISTER_FILE]),
-    Buffer.from(`${BASE_PATH}${newFile.name}$token=${token}$${aclData}$`)
+    Buffer.from(`${newFile.fullPath}$token=${token}$${aclData}$`)
   ]);
 
   try {
@@ -95,41 +97,29 @@ server.post('/register', requireAuth, async (req, res) => {
   }
 });
 
-server.post('/login', async (req, res) => {
-
-  res.cookie('auth_token', "123", {
-    httpOnly: true,
-    secure: false,
-    sameSite: 'Lax',
+// === IPC Handlers ===
+ipcMain.handle('dialog:openFile', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile']
   });
-  res.json({ status: 'success', message: 'Login successful' });
-
-  const { username, password } = req.body;
-  if (!username || !password) {
-    return res.status(400).json({ status: 'fail', error: 'Missing credentials' });
+  if (!result.canceled && result.filePaths.length > 0) {
+    return result.filePaths[0]; // return full file path
   }
+  return null;
+});
 
-  const loginBuffer = Buffer.concat([
-    Buffer.from([AgentActionType.LOGIN]),
-    Buffer.from(`${username}|${password}`)
-  ]);
-
+ipcMain.handle('file:getMeta', async (event, filePath) => {
   try {
-    const response = await sendToAgent(loginBuffer);
-    if (response[0] === 1) {
-      const token = response.slice(1).toString();
-      res.cookie('auth_token', token, {
-        httpOnly: true,
-        secure: false,
-        sameSite: 'Lax',
-      });
-      res.json({ status: 'success', message: 'Login successful' });
-    } else {
-      res.status(401).json({ status: 'fail', error: 'Invalid credentials' });
-    }
-  } catch (err) {
-    console.error('Error in login:', err);
-    res.status(500).json({ status: 'fail', error: 'Error during login process.' });
+    const stats = fs.statSync(filePath);
+    return {
+      name: path.basename(filePath),
+      size: stats.size,
+      lastModified: stats.mtimeMs,
+      path: filePath,
+    };
+  } catch (error) {
+    console.error('Failed to get file metadata:', error);
+    return null;
   }
 });
 
