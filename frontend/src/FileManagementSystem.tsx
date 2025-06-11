@@ -53,66 +53,6 @@ const FileManagementSystem = () => {
     fetchFiles();
   }, []);
 
-  const handleFileUpload = async () => {
-    const username = localStorage.getItem('userId');
-    const token = localStorage.getItem('authToken');
-
-    if (!token || !username) {
-    setResponseMessage("You must be logged in to upload a file.");
-    return; 
-    }
-
-    const fileInfo = await window.agentAPI.invoke("choose-file");
-    if (fileInfo === null) {
-    setResponseMessage("No file selected or error reading file info.");
-    return;
-    }
-
-    const filePath = fileInfo.path;
-    const fileName = filePath.split("\\").pop();
-
-    const date = new Date().toISOString().slice(0, 16).replace("T", " ");
-    const newFile = {
-        id: files.length + 1,
-        name: fileName,
-        uploadedBy: username,
-        uploadDate: date,
-        lastAccessed: new Date().toISOString().slice(0, 10),
-        size: fileInfo.size,
-        type: fileInfo.type || 'Unknown',
-        sharedWith: [],
-        accessHistory: [
-        {
-            user: username,
-            action: "uploaded",
-            date: date,
-        },
-        ],
-        path: filePath,
-    };
-
-    fetch('http://localhost:4000/upload', {
-    method: 'POST',
-    headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}` 
-        },
-
-    body: JSON.stringify(newFile), 
-    })
-    .then((response) => response.json()) 
-    .then((data) => {
-        setResponseMessage('Data sent successfully!');
-        console.log('Response:', data);
-    })
-    .catch((error) => {
-        console.error('Error:', error);
-        setResponseMessage('Error sending data');
-    });
-
-    setFiles((prevFiles) => [...prevFiles, newFile]);
-    };
-
   const triggerFileInput = () => {
     fileInputRef.current.click();
   };
@@ -471,13 +411,12 @@ const FileManagementSystem = () => {
     }
   };
 
-
   const renderFiles = () => (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Files</h2>
         <div>
-          <UploadFileButton onFileUpload={handleFileUpload} />
+          <UploadFileButton setFiles={setFiles} fetchFiles={fetchFiles} setResponseMessage={setResponseMessage}/>
         </div>
       </div>
       <div className="overflow-x-auto">
@@ -494,12 +433,7 @@ const FileManagementSystem = () => {
           <tbody className="bg-transparent divide-y divide-gray-600">
             {files.map(file => (
               <tr key={file.fileId} className="hover:bg-gray-800/30">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
-                {(file.originalFileName && typeof file.originalFileName === 'string') 
-                ? file.originalFileName.split('\\').pop() 
-                : 'Invalid Filename'
-                }
-            </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{file.originalFileName.split('\\').pop()}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.owner}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.uploadTime.split(' ')[0]}</td>
                 <td

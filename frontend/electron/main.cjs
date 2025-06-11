@@ -1,37 +1,51 @@
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
-const path = require("path");
-const net = require("net");
-const fs = require("fs").promises;
-const mime = require("mime-types");
-const express = require("express");
-const cookieParser = require("cookie-parser");
-const cors = require("cors");
+const { app, BrowserWindow } = require('electron');
+const { ipcMain, dialog } = require('electron');
+const fs = require('fs');
+const path = require('path');
+const express = require('express');
+const bodyParser = require('body-parser');
+const cookieParser = require('cookie-parser');
+const cors = require('cors');
+const net = require('net');
 const Config = require("./config.cjs");
 
-const expressApp = express();
-const PORT = 4000;
+// === Electron Window Setup ===
+function createWindow() {
+  const win = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    title: "DataVault",
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
+    },
+  });
 
-const corsOptions = {
-    origin: 'http://localhost', 
-    methods: "GET,HEAD,PUT,PATCH,POST,DELETE", 
-    allowedHeaders: "Content-Type,Authorization", 
-    credentials: true
-};
-
-expressApp.use(cors(corsOptions)); 
-
-expressApp.use(express.json());
-expressApp.use(cookieParser());
-
-const AgentActionType = { UPLOAD_FILE: 0x01 };
-
-function serializeACL(aclList) {
-  return aclList
-    .map((user) => `${user.name};${user.access === "read" ? "\x00" : "\x01"}`)
-    .join("|");
+  win.setMenu(null);
+  win.webContents.on('did-finish-load', () => {
+    win.setTitle('DataVault'); // or whatever title you want
+  });
+  win.loadURL('http://localhost'); // adjust if needed
 }
 
-function sendToAgent(message, commandName = "unknown_command") {
+// === Backend Setup ===
+const server = express();
+const HTTP_PORT = 2513;
+
+server.use(bodyParser.json());
+server.use(cookieParser());
+server.use(cors({ origin: true, credentials: true }));
+
+const AgentActionType = {
+  REGISTER_FILE: 1,
+  UPDATE_PERMISSIONS: 2,
+  DELETE_FILE: 3,
+  LOGIN: 4,
+};
+
+// === Helper functions ===
+function sendToAgent(message) {
   return new Promise((resolve, reject) => {
     const client = new net.Socket();
     let responseReceivedAndProcessed = false;
@@ -40,12 +54,12 @@ function sendToAgent(message, commandName = "unknown_command") {
     const responseTimeout = setTimeout(() => {
       if (!responseReceivedAndProcessed) {
         console.error(
-          `Agent response timeout for command '${commandName}'. Destroying socket.`
+          `Agent response timeout. Destroying socket.`
         );
         client.destroy();
         reject({
           status: "error",
-          message: `Agent response timed out for '${commandName}'.`,
+          message: `Agent response timed out.`,
         });
       }
     }, 5000);
@@ -66,7 +80,7 @@ function sendToAgent(message, commandName = "unknown_command") {
 
           if (responseByte === 0x01) {
             console.log(
-              `Agent responded with success (0x01) for '${commandName}'.`
+              `Agent responded with success (0x01)'.`
             );
             client.end();
             resolve({ status: "success", message: "OK" });
@@ -74,7 +88,7 @@ function sendToAgent(message, commandName = "unknown_command") {
             console.warn(
               `Agent responded with failure (0x${responseByte.toString(
                 16
-              )}) for '${commandName}'.`
+              )}).`
             );
             client.end();
             resolve({
@@ -92,7 +106,7 @@ function sendToAgent(message, commandName = "unknown_command") {
       clearTimeout(responseTimeout);
       if (!responseReceivedAndProcessed) {
         responseReceivedAndProcessed = true;
-        console.error(`Socket error for command '${commandName}':`, err);
+        console.error(`Socket error:`, err);
         client.destroy();
         reject({ status: "error", message: err.message });
       }
@@ -104,178 +118,89 @@ function sendToAgent(message, commandName = "unknown_command") {
         client.destroy();
         reject({
           status: "error",
-          message: `Agent closed connection unexpectedly early for '${commandName}'.`,
+          message: `Agent closed connection unexpectedly early'.`,
         });
       }
     });
 
     client.on("close", (hadError) => {
       console.log(
-        `Socket connection for '${commandName}' closed. hadError:`,
+        `Socket connection closed. hadError:`,
         hadError
       );
     });
   });
 }
 
-function messageCreation(
-  agentActionType,
-  path,
-  registerData = null,
-  authToken
-) {
-  const commandByte = Buffer.from([agentActionType]);
-  const filePathBuffer = Buffer.from(path, "utf-8");
-  const separator = Buffer.from("$", "utf-8");
-  const token = authToken
-    ? Buffer.from(`token=${authToken}`, "utf-8")
-    : null;
-  let message;
-
-  if (registerData === null) {
-    if (token) {
-      message = Buffer.concat([commandByte, filePathBuffer, separator, token]);
-    } else {
-      message = Buffer.concat([commandByte, filePathBuffer, separator]);
-    }
-  } else {
-    const acl = Buffer.from(registerData, "utf-8");
-    if (token) {
-      message = Buffer.concat([
-        commandByte,
-        filePathBuffer,
-        separator,
-        token,
-        acl,
-        separator,
-      ]);
-    } else {
-      message = Buffer.concat([
-        commandByte,
-        filePathBuffer,
-        separator,
-        acl,
-        separator,
-      ]);
-    }
-  }
-  console.log("data being sent to agent:", message.toString("utf-8"));
-  return message;
+function serializeACL(aclList) {
+  return aclList.map(user =>
+    `${user.name};${user.access === 'read' ? '0' : '1'}`
+  ).join('|');
 }
 
-expressApp.post("/upload", async (req, res) => {
-  console.log(`Received command on /upload`);
+function requireAuth(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.replace('Bearer ', '');
+  if (!token) {
+    return res.status(401).json({ status: 'fail', error: 'Missing or invalid auth token' });
+  }
+  next();
+}
+
+// === Routes ===
+server.post('/register', requireAuth, async (req, res) => {
+  const newFile = req.body;
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.replace('Bearer ', '');
+  const aclData = serializeACL(newFile.acl);
+  const buffer = Buffer.concat([
+    Buffer.from([AgentActionType.REGISTER_FILE]),
+    Buffer.from(`${newFile.fullPath.replace(/\\/g, '\\\\')}$token=${token}$${aclData}$`)
+  ]);
 
   try {
-    const { path: filePath, sharedWith } = req.body;
-
-    const authHeader = req.headers["authorization"];
-    const authToken = authHeader && authHeader.split(" ")[1];
-
-    console.log(authToken);
-
-    if (!authToken) {
-      console.error(`Authentication token missing for /upload`);
-      return res
-        .status(401)
-        .json({
-          status: "error",
-          message: "Authentication required. Token missing.",
-        });
-    }
-
-    const transformedFilePath = filePath.replaceAll("\\", "\\\\");
-    let registerData = serializeACL(sharedWith);
-    if (registerData.endsWith("|")) {
-      registerData = registerData.slice(0, -1);
-    }
-
-    const message = messageCreation(
-      AgentActionType.UPLOAD_FILE,
-      transformedFilePath,
-      registerData,
-      authToken
-    );
-
-    const agentResponse = await sendToAgent(message, "upload");
-
-    if (agentResponse.status === "success") {
-      res.json({ status: "success", message: "File registered successfully." });
-    } else {
-      res
-        .status(500)
-        .json({
-          status: "error",
-          message: agentResponse.message || "Agent reported an error.",
-        });
-    }
+    await sendToAgent(buffer);
+    res.json({ status: 'success' });
   } catch (err) {
-    console.error("Unexpected error in /upload route:", err);
-    res
-      .status(500)
-      .json({
-        status: "error",
-        message: "An unexpected server error occurred.",
-      });
+    console.error('Error during registration:', err);
+    res.status(500).json({ status: 'fail', error: 'Error during registration process.' });
   }
 });
 
-expressApp.listen(PORT, "127.0.0.1", () => {
-  console.log(
-    `Express server listening for uploads on http://127.0.0.1:${PORT}`
-  );
-});
-
-async function chooseFile() {
-  const { canceled, filePaths } = await dialog.showOpenDialog({
-    title: "Choose a file to upload",
-    properties: ["openFile"],
+// === IPC Handlers ===
+ipcMain.handle('dialog:openFile', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile']
   });
-
-  if (canceled || filePaths.length === 0) {
-    return null;
+  if (!result.canceled && result.filePaths.length > 0) {
+    return result.filePaths[0]; // return full file path
   }
-  const filePath = filePaths[0];
+  return null;
+});
 
+ipcMain.handle('file:getMeta', async (event, filePath) => {
   try {
-    const stats = await fs.stat(filePath);
-    if (stats.size < 1024 * 1024) {
-        fileSize = `${(stats.size / 1024).toFixed(1)} KB`;
-    } else {
-        fileSize = `${(stats.size / (1024 * 1024)).toFixed(1)} MB`;
-    }
-
-    const fileType = mime.lookup(filePath) || "application/octet-stream";
-
+    const stats = fs.statSync(filePath);
     return {
+      name: path.basename(filePath),
+      size: stats.size,
+      lastModified: stats.mtimeMs,
       path: filePath,
-      size: fileSize,
-      type: fileType,
     };
-  } catch (err) {
-    console.error("Error getting file stats or MIME type:", err);
+  } catch (error) {
+    console.error('Failed to get file metadata:', error);
     return null;
   }
-}
-
-ipcMain.handle("choose-file", async () => {
-  const fileInfo = await chooseFile();
-  console.log("File info chosen from dialog:", fileInfo);
-  return fileInfo;
 });
 
-function createWindow() {
-  const win = new BrowserWindow({
-    width: 800,
-    height: 600,
-    webPreferences: {
-      preload: path.join(__dirname, "preload.cjs"),
-      contextIsolation: true,
-      nodeIntegration: false,
-    },
+// === Start Servers ===
+app.whenReady().then(() => {
+  createWindow();
+  server.listen(HTTP_PORT, () => {
+    console.log(`Backend running on http://localhost:${HTTP_PORT}`);
   });
+});
 
-  win.loadURL("http://localhost:80");
-}
-
-app.whenReady().then(createWindow);
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit();
+});

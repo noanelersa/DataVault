@@ -2,7 +2,7 @@ import { Upload } from 'lucide-react';
 import { Button } from './components/ui/button';
 import { useState } from 'react';
 
-const UploadFileButton = ({ setFiles, setResponseMessage }) => {
+const UploadFileButton = ({ setFiles, fetchFiles, setResponseMessage }) => {
   const handleElectronUpload = async () => {
     const filePath = await window.electronAPI.selectFile();
     if (!filePath) return;
@@ -41,7 +41,7 @@ const UploadFileButton = ({ setFiles, setResponseMessage }) => {
 
       setResponseMessage('Data sent successfully!');
       console.log('Response:', data);
-      setFiles((prev) => [...prev, newFile]);
+      await fetchFiles();
     } catch (err) {
       console.error('Error:', err);
       setResponseMessage('Error sending data');
