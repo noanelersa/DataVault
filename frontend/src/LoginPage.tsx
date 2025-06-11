@@ -21,38 +21,33 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     setError("");
 
     try {
-      const response = await fetch("/api/user/login", {
-        method: "POST",
+      const response = await fetch('/api/user/login', {
+        method: 'POST',
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({
+          username: username,
+          password: password,
+        }),
       });
 
       if (response.ok) {
-        const authToken = await response.text();
-
-        if (!authToken) {
-          setError("Login successful, but no auth token was received.");
-          return;
-        }
-
+        const token = await response.text();
+        localStorage.setItem('jwt_token', token);
+        localStorage.setItem('userId', username);
         onLogin(username);
-        console.log("Login successful, received token:", authToken);
-
-        localStorage.setItem("authToken", authToken);
-        localStorage.setItem("userId", username);
+      } else if (response.status === 401) {
+        setError('Invalid username or password');
       } else {
-        const errorResult = await response
-          .json()
-          .catch(() => ({ message: "Invalid username or password" }));
-        setError(errorResult.message || "Invalid username or password");
+        setError(`Unexpected error: ${response.status}`);
       }
     } catch (err) {
       console.error("Login failed:", err);
       setError("Server error. Please try again later.");
     }
   };
+
 
   return (
     <div className="min-h-screen flex bg-gradient-to-br from-[#0a1128] via-[#1b2a49] to-[#0a1128] text-white font-sans">

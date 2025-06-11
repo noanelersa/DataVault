@@ -71,7 +71,8 @@ function serializeACL(aclList) {
 }
 
 function requireAuth(req, res, next) {
-  const token = req.cookies.auth_token;
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.replace('Bearer ', '');
   if (!token) {
     return res.status(401).json({ status: 'fail', error: 'Missing or invalid auth token' });
   }
@@ -81,7 +82,8 @@ function requireAuth(req, res, next) {
 // === Routes ===
 server.post('/register', requireAuth, async (req, res) => {
   const newFile = req.body;
-  const token = req.cookies.auth_token;
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.replace('Bearer ', '');
   const aclData = serializeACL(newFile.acl);
   const buffer = Buffer.concat([
     Buffer.from([AgentActionType.REGISTER_FILE]),
