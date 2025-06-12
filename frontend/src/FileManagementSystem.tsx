@@ -1,10 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { Button } from "./components/ui/button";
+import UploadFileButton from './UploadFileButton';
 import { Bell, Upload, Download, FileText, Users, AlertTriangle, MoreVertical, Share2, UserPlus, Clock, Info, ArrowLeft, Settings, Trash2, Ban } from 'lucide-react';
-import axios from 'axios';
-
-// const socket = io("localhost:2512"); // Connect to the server
 
 const FileManagementSystem = () => {
   const [page, setPage] = useState('files');
@@ -31,91 +29,29 @@ const FileManagementSystem = () => {
   
   const [files, setFiles] = useState([]);
 
-  useEffect(() => {
-    const fetchFiles = async () => {
-      try {
-        const response = await fetch(`/api/file/shared/${localStorage.getItem("userId")}`, {
-          method: 'GET', // or 'POST', 'PUT', etc.
-          headers: {
-            'Content-Type': 'application/json',
-            // Add any other headers if needed
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
+  const fetchFiles = async () => {
+    try {
+      const response = await fetch(`/api/file/shared/${localStorage.getItem("userId")}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
         }
+      });
 
-        const json = await response.json();
-        setFiles(json);
-      } catch (err: any) {
-        throw new Error(`HTTP error! Status: ${err}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
       }
-    };
-  
+
+      const json = await response.json();
+      setFiles(json);
+    } catch (err) {
+      console.error(`Error fetching files:`, err);
+    }
+  };
+
+  useEffect(() => {
     fetchFiles();
   }, []);
-  
-
-  const handleFileUpload = async () => {
-    const username = localStorage.getItem('userId');
-    const token = localStorage.getItem('authToken');
-
-    if (!token || !username) {
-    setResponseMessage("You must be logged in to upload a file.");
-    return; 
-    }
-
-    const fileInfo = await window.agentAPI.invoke("choose-file");
-    if (fileInfo === null) {
-    setResponseMessage("No file selected or error reading file info.");
-    return;
-    }
-
-    const filePath = fileInfo.path;
-    const fileName = filePath.split("\\").pop();
-
-    const date = new Date().toISOString().slice(0, 16).replace("T", " ");
-    const newFile = {
-        id: files.length + 1,
-        name: fileName,
-        uploadedBy: username,
-        uploadDate: date,
-        lastAccessed: new Date().toISOString().slice(0, 10),
-        size: fileInfo.size,
-        type: fileInfo.type || 'Unknown',
-        sharedWith: [],
-        accessHistory: [
-        {
-            user: username,
-            action: "uploaded",
-            date: date,
-        },
-        ],
-        path: filePath,
-    };
-
-    fetch('http://localhost:4000/upload', {
-    method: 'POST',
-    headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}` 
-        },
-
-    body: JSON.stringify(newFile), 
-    })
-    .then((response) => response.json()) 
-    .then((data) => {
-        setResponseMessage('Data sent successfully!');
-        console.log('Response:', data);
-    })
-    .catch((error) => {
-        console.error('Error:', error);
-        setResponseMessage('Error sending data');
-    });
-
-    setFiles((prevFiles) => [...prevFiles, newFile]);
-    };
 
   const triggerFileInput = () => {
     fileInputRef.current.click();
@@ -403,16 +339,16 @@ const FileManagementSystem = () => {
                 <dd className="text-sm text-white-900">{file.originalFileName.split('\\').pop().split('.').pop()}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-sm font-medium text-white-500">Size</dt>
-                <dd className="text-sm text-white-900">{file.size}</dd>
-              </div>
-              <div className="flex justify-between">
                 <dt className="text-sm font-medium text-white-500">Uploaded by</dt>
                 <dd className="text-sm text-white-900">{file.owner}</dd>
               </div>
               <div className="flex justify-between">
                 <dt className="text-sm font-medium text-white-500">Upload date</dt>
                 <dd className="text-sm text-white-900">{file.uploadTime.split(' ')[0]}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-sm font-medium text-white-500">Hash</dt>
+                <dd className="text-sm text-white-900">{file.originalFileHash}</dd>
               </div>
             </dl>
           </CardContent>
@@ -466,6 +402,7 @@ const FileManagementSystem = () => {
       if (response.ok) {
         console.log("File deleted successfully");
         setFiles(prev => prev.filter(file => file.name !== fileId));
+        await fetchFiles();
       } else {
         console.error("Failed to delete file");
       }
@@ -474,15 +411,12 @@ const FileManagementSystem = () => {
     }
   };
 
-
   const renderFiles = () => (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Files</h2>
         <div>
-          <Button onClick={handleFileUpload}>
-            <Upload className="mr-2" size={16} /> Upload New File
-          </Button>
+          <UploadFileButton setFiles={setFiles} fetchFiles={fetchFiles} setResponseMessage={setResponseMessage}/>
         </div>
       </div>
       <div className="overflow-x-auto">
@@ -499,12 +433,7 @@ const FileManagementSystem = () => {
           <tbody className="bg-transparent divide-y divide-gray-600">
             {files.map(file => (
               <tr key={file.fileId} className="hover:bg-gray-800/30">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
-                {(file.originalFileName && typeof file.originalFileName === 'string') 
-                ? file.originalFileName.split('\\').pop() 
-                : 'Invalid Filename'
-                }
-            </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{file.originalFileName.split('\\').pop()}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.owner}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{file.uploadTime.split(' ')[0]}</td>
                 <td
@@ -618,34 +547,6 @@ const FileManagementSystem = () => {
     </div>
   );
 
-
-  const renderUsers = () => (
-    <div className="space-y-4">
-      <h2 className="text-2xl font-bold">Users</h2>
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-transparent">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Username</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Last Active</th>
-            </tr>
-          </thead>
-          <tbody className="bg-transparent divide-y divide-white">
-            {[
-              { id: 1, name: 'user1', lastActive: '2024-12-26' },
-              { id: 2, name: 'user2', lastActive: '2024-12-24' }
-            ].map(user => (
-              <tr key={user.id} className="hover:bg-gray-800/30">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{user.name}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{user.lastActive}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-
   const useAlertNotifications = () => {
     const previousAlertCountRef = useRef(0);
 
@@ -697,9 +598,6 @@ const FileManagementSystem = () => {
                 setPage('alerts')}}>
                 <Bell className="mr-2" size={16} /> Alerts
               </Button>
-              <Button variant={page === 'users' ? 'default' : 'ghost'} onClick={() => setPage('users')}>
-                <Users className="mr-2" size={16} /> Users
-              </Button>
             </div>
           </div>
         </div>
@@ -712,7 +610,6 @@ const FileManagementSystem = () => {
           ) : (
             {
               files: renderFiles(),
-              users: renderUsers(),
             }[page]
         )}
       </div>
