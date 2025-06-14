@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Stream;
 
 @Service
 public class FilesService {
@@ -50,6 +49,10 @@ public class FilesService {
         aclService.newAcl(file, acl);
 
         return file.getFileId();
+    }
+
+    public FileEntity getByFileId(Long fileId) {
+        return fileRepository.findById(fileId).orElse(null);
     }
 
     public FileEntity getByFileId(String fileID) {
@@ -120,6 +123,7 @@ public class FilesService {
 
         hashService.deleteAllByFileEntity(file);
         aclService.deleteAllByFileEntity(file);
+        alertService.deleteAllByFileEntity(file);
         fileRepository.delete(file);
     }
 

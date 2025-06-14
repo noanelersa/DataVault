@@ -56,4 +56,9 @@ public class AlertService {
             return new AlertDTO(alertEntity.getUser().getUsername(), alertEntity.getAction());
         }).toList();
     }
+
+    public void deleteAllByFileEntity(FileEntity file) {
+        List<AlertEntity> alerts = alertRepository.findByFile(file);
+        alertRepository.deleteAll(alerts);
+    }
 }
