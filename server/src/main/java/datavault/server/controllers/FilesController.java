@@ -20,8 +20,8 @@ public class FilesController {
 
     @PostMapping
     public ResponseEntity<String> register(@RequestBody FilePostDTO filePostDTO) {
-        String fileId = filesService.newFile(filePostDTO);
-        return ResponseEntity.ok(fileId);
+        filesService.newFile(filePostDTO);
+        return ResponseEntity.ok().build();
     }
 
     @PutMapping

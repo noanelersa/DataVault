@@ -128,7 +128,11 @@ public class FilesService {
         List<AclEntity> userAcls = aclService.getAllAclForUser(user);
 
         return userAcls.stream().map(aclEntity -> {
+<<<<<<< HEAD
             return convertFileEntityToGetDto(aclEntity.getFile(), false);
+=======
+            return convertFileEntityToGetDto(aclEntity.getFile());
+>>>>>>> b9720c5 (DAT-166 add myRelevantFiles and acl to fileGetDto)
         }).toList();
     }
 }

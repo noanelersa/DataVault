@@ -3,6 +3,7 @@ package datavault.server.controllers;
 import datavault.server.dto.LoginDTO;
 import datavault.server.services.JwtService;
 import datavault.server.services.LoginService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("user")
+@Slf4j
 public class UsersController {
     @Autowired
     LoginService loginService;
@@ -21,6 +23,7 @@ public class UsersController {
 
     @PostMapping("/login")
     public ResponseEntity login(@RequestBody LoginDTO loginDTO) {
+        log.info("Yayyyyyyyyyyyyyyyy");
         Boolean isAuthenticated = loginService.validateCradentials(loginDTO);
 
         if (isAuthenticated) {

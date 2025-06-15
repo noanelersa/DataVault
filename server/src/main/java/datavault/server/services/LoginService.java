@@ -17,6 +17,7 @@ public class LoginService {
     public Boolean validateCradentials(LoginDTO loginDTO) {
         log.info("Validating user credentials: {}: {}", loginDTO.username(), loginDTO.password());
         String userDn = String.format(userDnPattern, loginDTO.username());
+        log.info(userDn);
         try {
             LdapContextSource contextSource = new LdapContextSource();
             contextSource.setUrl(ldapUrl);
@@ -27,6 +28,7 @@ public class LoginService {
             contextSource.getContext(userDn, loginDTO.password());
             return true;
         } catch (Exception e) {
+            log.error("fuck");
             System.out.println("Authentication failed: " + e.getMessage());
             return false;
         }
