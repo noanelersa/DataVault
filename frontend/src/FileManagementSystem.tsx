@@ -35,6 +35,7 @@ const FileManagementSystem = () => {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          "Authorization": `Bearer ${localStorage.getItem('jwt_token')}`,
         }
       });
 
@@ -207,13 +208,14 @@ const FileManagementSystem = () => {
     );
   };
 
-  function handleSavePermissions(fileForPermissionEdit, updatedACL) {
+  const handleSavePermissions = async (fileForPermissionEdit, updatedACL) =>{
     // Update permissions for users in updatedACL
     updatedACL.forEach(item => {      
       fetch(`/api/acl/${fileForPermissionEdit.fileId}/user/${item.username}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem('jwt_token')}`
         },
         credentials: 'include',
         body: JSON.stringify({
@@ -239,6 +241,9 @@ const FileManagementSystem = () => {
       if (!updatedUsernames.has(user.username)) {
         fetch(`/api/acl/${fileForPermissionEdit.fileId}/user/${user.username}`, {
           method: "DELETE",
+          headers: {
+            "Authorization": `Bearer ${localStorage.getItem('jwt_token')}`,
+          },
           credentials: 'include',
         })
         .then(res => {
@@ -257,6 +262,7 @@ const FileManagementSystem = () => {
     // Clear the file being edited and close the modal
     setFileForPermissionEdit(null);
     setShowPermissionModal(false);
+    await fetchFiles();
   }
 
 
@@ -397,6 +403,9 @@ const FileManagementSystem = () => {
       const response = await fetch(`/api/file/${fileId}`, {
         method: 'DELETE',
         credentials: 'include',
+        headers: {
+        'Authorization': `Bearer ${localStorage.getItem('jwt_token')}`,
+      },
       });
   
       if (response.ok) {
@@ -469,7 +478,8 @@ const FileManagementSystem = () => {
     fetch(`/api/alerts`, {
       method: 'GET',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        "Authorization": `Bearer ${localStorage.getItem('jwt_token')}`,
       }
     })
       .then((response) => response.json())
@@ -537,7 +547,7 @@ const FileManagementSystem = () => {
             >
               <Icon className={class_name} size={16} />
               <div>
-                <p className="text-sm font-medium">{alert.message.replace("user", alert.user.username)}</p>
+                <p className="text-sm font-medium">{alert.message.replace("user",`user ${alert.user.username}` )} by trying to {alert.action.toLowerCase()}</p>
                 <p className="text-xs text-gray-500">{alert.createdAt.replace('T', ' - ').split('.')[0]}</p>
               </div>
             </div>
