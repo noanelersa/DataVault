@@ -241,6 +241,9 @@ const FileManagementSystem = () => {
       if (!updatedUsernames.has(user.username)) {
         fetch(`/api/acl/${fileForPermissionEdit.fileId}/user/${user.username}`, {
           method: "DELETE",
+          headers: {
+            "Authorization": `Bearer ${localStorage.getItem('jwt_token')}`,
+          },
           credentials: 'include',
         })
         .then(res => {
