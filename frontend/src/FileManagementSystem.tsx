@@ -547,7 +547,7 @@ const FileManagementSystem = () => {
             >
               <Icon className={class_name} size={16} />
               <div>
-                <p className="text-sm font-medium">{alert.message.replace("user", alert.user.username)}</p>
+                <p className="text-sm font-medium">{alert.message.replace("user",`user ${alert.user.username}` )} by trying to {alert.action.toLowerCase()}</p>
                 <p className="text-xs text-gray-500">{alert.createdAt.replace('T', ' - ').split('.')[0]}</p>
               </div>
             </div>
