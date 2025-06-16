@@ -208,7 +208,7 @@ const FileManagementSystem = () => {
     );
   };
 
-  function handleSavePermissions(fileForPermissionEdit, updatedACL) {
+  const handleSavePermissions = async (fileForPermissionEdit, updatedACL) =>{
     // Update permissions for users in updatedACL
     updatedACL.forEach(item => {      
       fetch(`/api/acl/${fileForPermissionEdit.fileId}/user/${item.username}`, {
@@ -262,6 +262,7 @@ const FileManagementSystem = () => {
     // Clear the file being edited and close the modal
     setFileForPermissionEdit(null);
     setShowPermissionModal(false);
+    await fetchFiles();
   }
 
 
