@@ -35,6 +35,7 @@ const FileManagementSystem = () => {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          "Authorization": `Bearer ${localStorage.getItem('jwt_token')}`,
         }
       });
 
@@ -214,6 +215,7 @@ const FileManagementSystem = () => {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem('jwt_token')}`
         },
         credentials: 'include',
         body: JSON.stringify({
@@ -397,6 +399,9 @@ const FileManagementSystem = () => {
       const response = await fetch(`/api/file/${fileId}`, {
         method: 'DELETE',
         credentials: 'include',
+        headers: {
+        'Authorization': `Bearer ${localStorage.getItem('jwt_token')}`,
+      },
       });
   
       if (response.ok) {
@@ -469,7 +474,8 @@ const FileManagementSystem = () => {
     fetch(`/api/alerts`, {
       method: 'GET',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        "Authorization": `Bearer ${localStorage.getItem('jwt_token')}`,
       }
     })
       .then((response) => response.json())
