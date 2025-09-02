@@ -185,6 +185,8 @@ BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username
 
     char* protectedFilePath = GetPathFromUI(recvbuf);
 
+    printf("####### HandleUIFileRegister PATH: %s \n", protectedFilePath);
+
     uint8_t fileHash[HASH_SIZE * 2 + 1] = { 0 };
     if (ComputeFileSha256Hex(protectedFilePath, fileHash) != 0)
     {
@@ -194,6 +196,8 @@ BOOLEAN HandleUIFileRegister(char* recvbuf, int recvbuflen, const char* username
         free(protectedFilePath);
         return FALSE;
     }
+
+    printf("####### HandleUIFileRegister HASH: %s \n", fileHash);
 
     char* jsonAclString = ParseAccessControl(recvbuf);
     

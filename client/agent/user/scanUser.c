@@ -291,6 +291,8 @@ Return Value
         // Copy the NT path after "C:"
         strcpy(filePath + 2, ntPath + 23);
 
+        printf("####### ScannerWorker PATH: %s \n", filePath);
+
         const unsigned char requestedAction = notification->Action;
 
         uint8_t currentFileHash[HASH_SIZE * 2 + 1] = { 0 };
@@ -308,6 +310,8 @@ Return Value
                     continue;
                 }
             }
+
+            printf("####### ScannerWorker HASH: %s \n", currentFileHash);
 
             result = CheckUserActionWithServer(Context->username, currentFileHash, requestedAction);
 
@@ -470,22 +474,25 @@ main (
     BOOLEAN retGetUser = GetSystemUser(username, sizeof(username));
     if (!retGetUser)
     {
-        printf("Error: Getting the systen username failed\n");
+        printf("Error: Getting the system username failed\n");
         return 1;
     }
 
-    // Hash the username with FNV-1a.
-    char hashedUsername[FNV_HASH_STR_LEN] = { 0 };
-    Fnv1aHashString(username, hashedUsername);
+    // Strip domain or machine name (keep only the part after '\' or '/').
+    char* actualUsername = strrchr(username, '\\');
+    if (!actualUsername)
+        actualUsername = strrchr(username, '/');
+    actualUsername = actualUsername ? actualUsername + 1 : username;
 
-	// Initialize the agent listener.
+    // Initialize the agent listener.
     if (!InitializeServer(&listenSocket))
     {
         return 1;
     }
 
-	agentServerContext.listenSocket = &listenSocket;
-	agentServerContext.username = hashedUsername;
+    agentServerContext.listenSocket = &listenSocket;
+    agentServerContext.username = actualUsername;
+
 
     // Create a thread to handle client connections.
     serverThread = CreateThread(NULL, 0, ServerWorker, &agentServerContext, 0, &threadId);
@@ -536,7 +543,7 @@ main (
 
     context.Port = port;
     context.Completion = completion;
-	context.username = hashedUsername;
+	context.username = actualUsername;
 
     //
     //  Allocate messages.
