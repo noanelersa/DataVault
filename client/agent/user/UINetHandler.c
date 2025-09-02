@@ -101,8 +101,14 @@ DWORD WINAPI ServerWorker(LPVOID lpParam)
 
                 memset(outBuf, 0, sizeof(outBuf));
 
-				// Send the response to the UI.
-                iSendResult = send(clientSocket, (const char*)&ret, sizeof(BOOLEAN), 0);
+                BOOLEAN success = HandleUIRequest(recvbuf,iResult,username,outBuf,sizeof(outBuf));
+
+                char sendBuf[1050] = { 0 };
+                sendBuf[0] = (char)success; 
+                strncpy(sendBuf + 1, outBuf, sizeof(sendBuf) - 1);
+
+                int totalSize = 1 + (int)strlen(sendBuf + 1); 
+                iSendResult = send(clientSocket, sendBuf, totalSize, 0);
 
                 if (iSendResult == SOCKET_ERROR)
                 {
