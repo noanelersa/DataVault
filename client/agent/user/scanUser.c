@@ -291,8 +291,6 @@ Return Value
         // Copy the NT path after "C:"
         strcpy(filePath + 2, ntPath + 23);
 
-        printf("####### ScannerWorker PATH: %s \n", filePath);
-
         const unsigned char requestedAction = notification->Action;
 
         uint8_t currentFileHash[HASH_SIZE * 2 + 1] = { 0 };
@@ -310,8 +308,6 @@ Return Value
                     continue;
                 }
             }
-
-            printf("####### ScannerWorker HASH: %s \n", currentFileHash);
 
             result = CheckUserActionWithServer(Context->username, currentFileHash, requestedAction);
 

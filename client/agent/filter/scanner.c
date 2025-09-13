@@ -50,7 +50,24 @@ ULONG ScannedExtensionCount;
 //  The default extension to scan if not configured in the registry
 //
 
-UNICODE_STRING ScannedExtensionDefault = RTL_CONSTANT_STRING(L"doc");
+UNICODE_STRING ScannedExtensionDefaults[] = {
+    RTL_CONSTANT_STRING(L"png"),
+    RTL_CONSTANT_STRING(L"jpg"),
+    RTL_CONSTANT_STRING(L"jpeg"),
+    RTL_CONSTANT_STRING(L"gif"),
+    RTL_CONSTANT_STRING(L"json"),
+    RTL_CONSTANT_STRING(L"txt"),
+    RTL_CONSTANT_STRING(L"doc"),
+    RTL_CONSTANT_STRING(L"docx"),
+    RTL_CONSTANT_STRING(L"ppt"),
+    RTL_CONSTANT_STRING(L"pptx"),
+    RTL_CONSTANT_STRING(L"xls"),
+    RTL_CONSTANT_STRING(L"xlsx"),
+    RTL_CONSTANT_STRING(L"zip"),
+    RTL_CONSTANT_STRING(L"rar"),
+    RTL_CONSTANT_STRING(L"pdf"),
+    RTL_CONSTANT_STRING(L"exe")
+};
 
 //
 //  Function prototypes
@@ -355,15 +372,16 @@ Return Value:
     // Obtain the extensions to scan from the registry
     //
 
-    status = ScannerInitializeScannedExtensions(DriverObject, RegistryPath);
+    //status = ScannerInitializeScannedExtensions(DriverObject, RegistryPath);
 
-    if (!NT_SUCCESS(status)) {
+    //if (!NT_SUCCESS(status)) {
 
-        status = STATUS_SUCCESS;
+    status = STATUS_SUCCESS;
 
-        ScannedExtensions = &ScannedExtensionDefault;
-        ScannedExtensionCount = 1;
-    }
+
+    ScannedExtensions = ScannedExtensionDefaults;
+    ScannedExtensionCount = 16;
+    //}
 
     //
     //  Create a communication port.
@@ -769,13 +787,13 @@ Return Value:
 
         ScannedExtensionCount--;
 
-        if (ScannedExtensions != &ScannedExtensionDefault) {
+        if (ScannedExtensions != &ScannedExtensionDefaults) {
 
             ScannerFreeUnicodeString(ScannedExtensions + ScannedExtensionCount);
         }
     }
 
-    if (ScannedExtensions != &ScannedExtensionDefault && ScannedExtensions != NULL) {
+    if (ScannedExtensions != &ScannedExtensionDefaults && ScannedExtensions != NULL) {
 
         ExFreePoolWithTag(ScannedExtensions, SCANNER_STRING_TAG);
     }
@@ -1343,7 +1361,7 @@ Return Value:
 
         return FLT_POSTOP_FINISHED_PROCESSING;  
     }  
-     else if (FltObjects->FileObject->WriteAccess) {  
+     else {  
 
         //  
         //  
@@ -1363,7 +1381,14 @@ Return Value:
             //  Set the handle context.  
             //  
 
-            scannerContext->RecalculateHash = TRUE;
+            if (FltObjects->FileObject->WriteAccess)
+            {
+                scannerContext->RecalculateHash = TRUE;
+            }
+            else
+            {
+                scannerContext->RecalculateHash = FALSE;
+            }
 
             //  
             //  Normally we would check the results of FltSetStreamHandleContext  
